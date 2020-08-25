@@ -24,87 +24,90 @@ class MyDelegate(btle.DefaultDelegate):
 
 addresses = {
     # 010000xx
-    "serverSetupFileName":            "01000000",
+    "serverSetupFileName":            b"\x01\x00\x00\x00",
     # 010001xx
-    "songToneLanguage":               "01000100",
-    "keyTransposeRO":                 "01000101",
-    "songTransposeRO":                "01000102",
-    "sequencerStatus":                "01000103",
-    "sequencerMeasure":               "01000105",
-    "sequencerTempoNotation":         "01000107",
-    "sequencerTempoRO":               "01000108",
-    "sequencerBeatNumerator":         "0100010A",
-    "sequencerBeatDenominator":       "0100010B",
-    "sequencerPartSwAccomp":          "0100010C",
-    "sequencerPartSwLeft":            "0100010D",
-    "sequencerPartSwRight":           "0100010E",
-    "metronomeStatus":                "0100010F",
-    "headphonesConnection":           "01000110",
+    "songToneLanguage":               b"\x01\x00\x01\x00",
+    "keyTransposeRO":                 b"\x01\x00\x01\x01",
+    "songTransposeRO":                b"\x01\x00\x01\x02",
+    "sequencerStatus":                b"\x01\x00\x01\x03",
+    "sequencerMeasure":               b"\x01\x00\x01\x05",
+    "sequencerTempoNotation":         b"\x01\x00\x01\x07",
+    "sequencerTempoRO":               b"\x01\x00\x01\x08",
+    "sequencerBeatNumerator":         b"\x01\x00\x01\x0A",
+    "sequencerBeatDenominator":       b"\x01\x00\x01\x0B",
+    "sequencerPartSwAccomp":          b"\x01\x00\x01\x0C",
+    "sequencerPartSwLeft":            b"\x01\x00\x01\x0D",
+    "sequencerPartSwRight":           b"\x01\x00\x01\x0E",
+    "metronomeStatus":                b"\x01\x00\x01\x0F",
+    "headphonesConnection":           b"\x01\x00\x01\x10",
     # 010002xx
-    "keyBoardMode":                   "01000200",
-    "splitPoint":                     "01000201",
-    "splitOctaveShift":               "01000202",
-    "splitBalance":                   "01000203",
-    "dualOctaveShift":                "01000204",
-    "dualBalance":                    "01000205",
-    "twinPianoMode":                  "01000206",
-    "toneForSingle":                  "01000207",
-    "toneForSplit":                   "0100020A",
-    "toneForDual":                    "0100020D",
-    "songNumber":                     "01000210",
-    "masterVolume":                   "01000213",
-    "masterVolumeLimit":              "01000214",
-    "allSongPlayMode":                "01000215",
-    "splitRightOctaveShift":          "01000216",
-    "dualTone1OctaveShift":           "01000217",
-    "masterTuning":                   "01000218",
-    "ambience":                       "0100021A",
-    "headphones3DAmbience":           "0100021B",
-    "brilliance":                     "0100021C",
-    "keyTouch":                       "0100021D",
-    "transposeMode":                  "0100021E",
-    "metronomeBeat":                  "0100021F",
-    "metronomePattern":               "01000220",
-    "metronomeVolume":                "01000221",
-    "metronomeTone":                  "01000222",
-    "metronomeDownBeat":              "01000223",
+    "keyBoardMode":                   b"\x01\x00\x02\x00",
+    "splitPoint":                     b"\x01\x00\x02\x01",
+    "splitOctaveShift":               b"\x01\x00\x02\x02",
+    "splitBalance":                   b"\x01\x00\x02\x03",
+    "dualOctaveShift":                b"\x01\x00\x02\x04",
+    "dualBalance":                    b"\x01\x00\x02\x05",
+    "twinPianoMode":                  b"\x01\x00\x02\x06",
+    "toneForSingle":                  b"\x01\x00\x02\x07",
+    "toneForSplit":                   b"\x01\x00\x02\x0A",
+    "toneForDual":                    b"\x01\x00\x02\x0D",
+    "songNumber":                     b"\x01\x00\x02\x10",
+    "masterVolume":                   b"\x01\x00\x02\x13",
+    "masterVolumeLimit":              b"\x01\x00\x02\x14",
+    "allSongPlayMode":                b"\x01\x00\x02\x15",
+    "splitRightOctaveShift":          b"\x01\x00\x02\x16",
+    "dualTone1OctaveShift":           b"\x01\x00\x02\x17",
+    "masterTuning":                   b"\x01\x00\x02\x18",
+    "ambience":                       b"\x01\x00\x02\x1A",
+    "headphones3DAmbience":           b"\x01\x00\x02\x1B",
+    "brilliance":                     b"\x01\x00\x02\x1C",
+    "keyTouch":                       b"\x01\x00\x02\x1D",
+    "transposeMode":                  b"\x01\x00\x02\x1E",
+    "metronomeBeat":                  b"\x01\x00\x02\x1F",
+    "metronomePattern":               b"\x01\x00\x02\x20",
+    "metronomeVolume":                b"\x01\x00\x02\x21",
+    "metronomeTone":                  b"\x01\x00\x02\x22",
+    "metronomeDownBeat":              b"\x01\x00\x02\x23",
     # 010003xx
-    "applicationMode":                "01000300",
-    "scorePageTurn":                  "01000302",
-    "arrangerPedalFunction":          "01000303",
-    "arrangerBalance":                "01000305",
-    "connection":                     "01000306",
-    "keyTransposeWO":                 "01000307",
-    "songTransposeWO":                "01000308",
-    "sequencerTempoWO":               "01000309",
-    "tempoReset":                     "0100030B",
+    "applicationMode":                b"\x01\x00\x03\x00",
+    "scorePageTurn":                  b"\x01\x00\x03\x02",
+    "arrangerPedalFunction":          b"\x01\x00\x03\x03",
+    "arrangerBalance":                b"\x01\x00\x03\x05",
+    "connection":                     b"\x01\x00\x03\x06",
+    "keyTransposeWO":                 b"\x01\x00\x03\x07",
+    "songTransposeWO":                b"\x01\x00\x03\x08",
+    "sequencerTempoWO":               b"\x01\x00\x03\x09",
+    "tempoReset":                     b"\x01\x00\x03\x0B",
     # 010004xx
-    "soundEffect":                    "01000400",
-    "soundEffectStopAll":             "01000402",
+    "soundEffect":                    b"\x01\x00\x04\x00",
+    "soundEffectStopAll":             b"\x01\x00\x04\x02",
     # 010005xx
-    "sequencerREW":                   "01000500",
-    "sequencerFF":                    "01000501",
-    "sequencerReset":                 "01000502",
-    "sequencerTempoDown":             "01000503",
-    "sequencerTempoUp":               "01000504",
-    "sequencerPlayStopToggle":        "01000505",
-    "sequencerAccompPartSwToggle":    "01000506",
-    "sequencerLeftPartSwToggle":      "01000507",
-    "sequencerRightPartSwToggle":     "01000508",
-    "metronomeSwToggle":              "01000509",
-    "sequencerPreviousSong":          "0100050A",
-    "sequencerNextSong":              "0100050B",
+    "sequencerREW":                   b"\x01\x00\x05\x00",
+    "sequencerFF":                    b"\x01\x00\x05\x01",
+    "sequencerReset":                 b"\x01\x00\x05\x02",
+    "sequencerTempoDown":             b"\x01\x00\x05\x03",
+    "sequencerTempoUp":               b"\x01\x00\x05\x04",
+    "sequencerPlayStopToggle":        b"\x01\x00\x05\x05",
+    "sequencerAccompPartSwToggle":    b"\x01\x00\x05\x06",
+    "sequencerLeftPartSwToggle":      b"\x01\x00\x05\x07",
+    "sequencerRightPartSwToggle":     b"\x01\x00\x05\x08",
+    "metronomeSwToggle":              b"\x01\x00\x05\x09",
+    "sequencerPreviousSong":          b"\x01\x00\x05\x0A",
+    "sequencerNextSong":              b"\x01\x00\x05\x0B",
     # 010006xx
-    "pageTurnPreviousPage":           "01000600",
-    "pageTurnNextPage":               "01000601",
+    "pageTurnPreviousPage":           b"\x01\x00\x06\x00",
+    "pageTurnNextPage":               b"\x01\x00\x06\x01",
     # 010007xx
-    "uptime":                         "01000700",
+    "uptime":                         b"\x01\x00\x07\x00",
     # 010008xx
-    "addressMapVersion":              "01000800"}
+    "addressMapVersion":              b"\x01\x00\x08\x00"}
 
 
 def int_to_byte(num):
     return num.to_bytes(1,byteorder='big')
+
+def byte_to_int(byte):
+    return int.from_bytes(byte,byteorder='big')
 
 def note_string_to_midi(midstr):
     notes = [["C"],["C#","Db"],["D"],["D#","Eb"],["E"],["F"],["F#","Gb"],["G"],["G#","Ab"],["A"],["A#","Bb"],["B"]]
@@ -129,10 +132,23 @@ mac_addr_roland_fp_10        = "c3:14:a9:3e:8f:77"
 
 
 
+
+
 class RolandPiano(btle.Peripheral):
     service_uuid        = "03b80e5a-ede8-4b33-a751-6ce34ec4c700"
     characteristic_uuid = "7772e5db-3868-4112-a1a9-f2669d106bf3"
     setup_data = b"\x01\x00"
+
+    # http://www.chromakinetics.com/handsonic/rolSysEx.htm
+    lut_midi = {
+        'msg_start' : b'\xf0',
+        'msg_end'   : b'\xf7',
+        'id_roland' : b'\x41',
+        'id_device' : b'\x10',
+        'id_fp10'   : b'\x28',
+        'cmd_write' : b'\x12',
+        'cmd_read'  : b'\x11',
+    }
 
     lookup_status = {
         'note_on_ch0' : b'\x90'}
@@ -146,26 +162,61 @@ class RolandPiano(btle.Peripheral):
 
         self.handle_table = pd.concat(rows)
 
-    def construct_msg(self,status_note, data):
-        unix_time      = int(bin(int(time.time()))[-8:],2).to_bytes(1,byteorder='little')
+    def read_register(self,addr):
+        ut        = self.get_unix_time()
+        header    = self.get_header(ut)
+        timestamp = self.get_timestamp(ut)
 
+        
+        total = 0
+        for b in addr:
+            total += b
+        total += 8 # data is fixed to 00000008
+        checksum = int_to_byte(128 - (total % 128))
+
+        msg = header + timestamp + self.lut_midi['msg_start'] + \
+            self.lut_midi['id_roland'] + \
+            self.lut_midi['id_device'] + \
+            b"\x00\x00\x00" + \
+            self.lut_midi['id_fp10'] + \
+            self.lut_midi['cmd_read'] + \
+            addr + \
+            b"\x00\x00\x00\x08" + \
+            checksum + \
+            timestamp + \
+            self.lut_midi['msg_end']
+        
+        # TODO: check if msg exceeds BLE size
+        print(msg.hex())
+        print(self.writeCharacteristic(16,msg))
+            
+
+
+        # <header> <timestamp> f0 41 10 00 00 00 28 12 <addr 4> <data> <checksum> <timestamp>
+        pass
+
+    def write_register(self,addr,data):
+        pass
+
+    def get_header(self,unix_time):
         mask_header    = b'\x7f'
+        return ((mask_header[0]    & unix_time[0]) | b'\x80'[0]).to_bytes(1,byteorder='little') #0b10000000
+    
+    def get_timestamp(self,unix_time):
         mask_timestamp = b'\x3f'
-        # https://devzone.nordicsemi.com/nordic/short-range-guides/b/bluetooth-low-energy/posts/midi-over-bluetooth-le
-        header    = ((mask_header[0]    & unix_time[0]) | b'\x80'[0]).to_bytes(1,byteorder='little') #0b10000000
-        timestamp = ((mask_timestamp[0] & unix_time[0]) | b'\x80'[0]).to_bytes(1,byteorder='little') #0b10000000
+        return ((mask_timestamp[0] & unix_time[0]) | b'\x80'[0]).to_bytes(1,byteorder='little') #0b10000000
 
-        status_note = b'\x90'
-
-        return header + timestamp + status_note + data
-
+    def get_unix_time(self):
+        return int(bin(int(time.time()))[-8:],2).to_bytes(1,byteorder='little')
 
     def play_note(self,note, force):
         note  = note_string_to_midi(note)
         force = int_to_byte(force)
 
-        msg = self.construct_msg(self.lookup_status['note_on_ch0'],note + force)
-        self.writeCharacteristic(16,msg)
+        ut = self.get_unix_time()
+
+        msg = self.get_header(ut) + self.get_timestamp(ut) + self.lookup_status['note_on_ch0'] + note + force
+        self.writeCharacteristic(16,msg) # 16 is the handler of the midi characteristic
 
     def get_handle(self,uuid):
         return self.handle_table.loc[self.handle_table['uuid_str'].str.contains(uuid)].at[0,'handle']
@@ -179,7 +230,6 @@ class RolandPiano(btle.Peripheral):
 
     def __init__(self,mac_addr):
         btle.Peripheral.__init__(self, mac_addr,"random")
-        # self.midi_ble_dev = btle.Peripheral
         self.midi_ble_service = self.getServiceByUUID(self.service_uuid)
         self.midi_ble_characteristic = self.midi_ble_service.getCharacteristics(self.characteristic_uuid)[0]
 
@@ -187,12 +237,15 @@ class RolandPiano(btle.Peripheral):
 
         self.read_all_characteristics()
 
-        print(f"Type of piano: {self.readCharacteristic(self.get_handle('2a00'))}")
+        print(f"Type of piano: {self.readCharacteristic(self.get_handle('2a00'))}") # device_name
 
-        # # # Enable notifications
-        # self.midi_ble_dev.writeCharacteristic(self.midi_ble_notify_handle,self.setup_data,withResponse=True)
-        # if not self.midi_ble_dev.readCharacteristic(midi_ble_notify_handle) == b'\x01\x00':
-        #     print("Notification not correctly set in descriptor")
+        # Enable notifications (Not working)
+        self.writeCharacteristic(self.get_handle('2902'),self.setup_data,withResponse=True)
+        if not self.readCharacteristic(self.get_handle('2902')) == b'\x01\x00':
+            print("Notification not correctly set in descriptor")
+        self.setDelegate(MyDelegate())
+
+
 
 
 
@@ -202,6 +255,10 @@ fp10 = RolandPiano(mac_addr_roland_fp_10)
 fp10.play_note("C-3",50)
 time.sleep(1)
 fp10.play_note("C-4",50)
+fp10.read_register(addresses['uptime'])
+
+
+
 fp10.disconnect()
 
 
