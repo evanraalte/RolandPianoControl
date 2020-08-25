@@ -145,7 +145,7 @@ class RolandPiano(btle.Peripheral):
         'msg_end'   : b'\xf7',
         'id_roland' : b'\x41',
         'id_device' : b'\x10',
-        'id_fp10'   : b'\x28',
+        'id_fp10'   : b'\x28', # This seems to be not bound to fp-10 actually
         'cmd_write' : b'\x12',
         'cmd_read'  : b'\x11',
     }
@@ -162,17 +162,20 @@ class RolandPiano(btle.Peripheral):
 
         self.handle_table = pd.concat(rows)
 
-    def read_register(self,addr):
+    def get_checksum(self,addr,data):
+        total = 0
+        for b in addr:
+            total += b
+        for b in data:
+            total += b        
+        return int_to_byte(128 - (total % 128))        
+
+    def read_register(self,addr,data = b"\x00\x00\x00\x08"):
         ut        = self.get_unix_time()
         header    = self.get_header(ut)
         timestamp = self.get_timestamp(ut)
 
-        
-        total = 0
-        for b in addr:
-            total += b
-        total += 8 # data is fixed to 00000008
-        checksum = int_to_byte(128 - (total % 128))
+        checksum = self.get_checksum(addr,data)
 
         msg = header + timestamp + self.lut_midi['msg_start'] + \
             self.lut_midi['id_roland'] + \
@@ -181,21 +184,40 @@ class RolandPiano(btle.Peripheral):
             self.lut_midi['id_fp10'] + \
             self.lut_midi['cmd_read'] + \
             addr + \
-            b"\x00\x00\x00\x08" + \
+            data + \
             checksum + \
             timestamp + \
             self.lut_midi['msg_end']
         
         # TODO: check if msg exceeds BLE size
         print(msg.hex())
-        print(self.writeCharacteristic(16,msg))
-            
-
-
-        # <header> <timestamp> f0 41 10 00 00 00 28 12 <addr 4> <data> <checksum> <timestamp>
+        self.writeCharacteristic(16,msg) #Response is via Notification, which is not working atm
+        
+        # <header> <timestamp> f0 41 10 00 00 00 28 12 <addr 4> <data 4> <checksum> <timestamp>
         pass
 
     def write_register(self,addr,data):
+        ut        = self.get_unix_time()
+        header    = self.get_header(ut)
+        timestamp = self.get_timestamp(ut)
+
+        checksum = self.get_checksum(addr,data)
+
+        msg = header + timestamp + self.lut_midi['msg_start'] + \
+            self.lut_midi['id_roland'] + \
+            self.lut_midi['id_device'] + \
+            b"\x00\x00\x00" + \
+            self.lut_midi['id_fp10'] + \
+            self.lut_midi['cmd_write'] + \
+            addr + \
+            data + \
+            checksum + \
+            timestamp + \
+            self.lut_midi['msg_end']
+
+        print(msg.hex())
+        self.writeCharacteristic(16,msg) #Response is via Notification, which is not working atm
+
         pass
 
     def get_header(self,unix_time):
@@ -241,7 +263,7 @@ class RolandPiano(btle.Peripheral):
 
         # Enable notifications (Not working)
         self.writeCharacteristic(self.get_handle('2902'),self.setup_data,withResponse=True)
-        if not self.readCharacteristic(self.get_handle('2902')) == b'\x01\x00':
+        if not self.readCharacteristic(self.get_handle('2902')) == setup_data:
             print("Notification not correctly set in descriptor")
         self.setDelegate(MyDelegate())
 
@@ -256,12 +278,27 @@ fp10.play_note("C-3",50)
 time.sleep(1)
 fp10.play_note("C-4",50)
 fp10.read_register(addresses['uptime'])
+fp10.write_register(addresses['connection'],b"\x01")
+# fp10.write_register(addresses['applicationMode'],b"\x01")
+fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
+# fp10.write_register(addresses['metronomeBeat'],b"\x10")
 
+
+# fp10.write_register(addresses['masterVolume'],b"\x7f")
+# time.sleep(1)
+# fp10.write_register(addresses['masterVolume'],b"\x00")
+# time.sleep(1)
+# fp10.write_register(addresses['masterVolume'],b"\x32")
+
+# write connection 1
+# write applicationMode 1
+# read sequencer status
+# read metronomeStatus
 
 
 fp10.disconnect()
 
-
+#connect app, go to first screen, go to second screen, on 72 258 75 off
 
 
 
