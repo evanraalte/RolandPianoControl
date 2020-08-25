@@ -1,5 +1,6 @@
 from bluepy import btle
 import time
+import pandas as pd
 # 1. Install library: https://github.com/IanHarvey/bluepy
 # 2. Add the following lines in: /etc/bluetooth/main.conf
 #     EnableLE = true           # Enable Low Energy support. Default is false.
@@ -102,12 +103,6 @@ addresses = {
     "addressMapVersion":              "01000800"}
 
 
-mac_addr     = "c3:14:a9:3e:8f:77"  
-service_uuid = "03b80e5a-ede8-4b33-a751-6ce34ec4c700" # MIDI BLE service
-
-setup_data = b"\x01\x00"
-
-
 def int_to_byte(num):
     return num.to_bytes(1,byteorder='big')
 
@@ -128,72 +123,100 @@ def note_string_to_midi(midstr):
     return int_to_byte(answer)
 
 
-def construct_msg(data):
-    unix_time      = int(bin(int(time.time()))[-8:],2).to_bytes(1,byteorder='little')
-
-    mask_header    = b'\x7f'
-    mask_timestamp = b'\x3f'
-    # https://devzone.nordicsemi.com/nordic/short-range-guides/b/bluetooth-low-energy/posts/midi-over-bluetooth-le
-    header    = ((mask_header[0]    & unix_time[0]) | b'\x80'[0]).to_bytes(1,byteorder='little') #0b10000000
-    timestamp = ((mask_timestamp[0] & unix_time[0]) | b'\x80'[0]).to_bytes(1,byteorder='little') #0b10000000
-
-    status_note = b'\x90'
-
-    return header + timestamp + status_note + data
 
 
-def play_note(dev,note_string,intensity_int):
-    note = note_string_to_midi(note_string)
-    force = int_to_byte(intensity_int)
-
-    msg = construct_msg(note + force)
-    midi_ble_dev.writeCharacteristic(16,msg)
+mac_addr_roland_fp_10        = "c3:14:a9:3e:8f:77"  
 
 
-def getNotificationHandle(dev,uuid):
-    for desc in midi_ble_dev.getDescriptors():
-        if uuid in str(desc.uuid):
-            return desc.handle
 
-try:
-    midi_ble_dev = btle.Peripheral(mac_addr,"random")
+class RolandPiano():
+    service_uuid        = "03b80e5a-ede8-4b33-a751-6ce34ec4c700"
+    characteristic_uuid = "7772e5db-3868-4112-a1a9-f2669d106bf3"
+    setup_data = b"\x01\x00"
+    midi_ble_dev = None
 
-    midi_ble_dev.setDelegate(MyDelegate())
+    lookup_status = {
+        'note_on_ch0' : b'\x90'}
+        
 
-    midi_ble_service = midi_ble_dev.getServiceByUUID(service_uuid)
+    def build_handle_table(self):
+        cols = ['handle','uuid_bytes','uuid_str']
+        rows = []
+        for desc in self.midi_ble_dev.getDescriptors():
+            rows.append(pd.DataFrame([{'handle' : desc.handle, 'uuid_bytes' : desc.uuid, 'uuid_str' : str(desc.uuid)}],columns = cols))
 
-    midi_ble_characteristic = midi_ble_service.getCharacteristics("7772e5db-3868-4112-a1a9-f2669d106bf3")[0]
+        self.handle_table = pd.concat(rows)
 
-    # Get notification handle
-    midi_ble_notify_handle  = getNotificationHandle(midi_ble_dev,'2902')
-    
-    print(midi_ble_dev.readCharacteristic(midi_ble_notify_handle))
-    # Enable notifications
-    midi_ble_dev.writeCharacteristic(midi_ble_notify_handle,setup_data,withResponse=True)
+    def construct_msg(self,status_note, data):
+        unix_time      = int(bin(int(time.time()))[-8:],2).to_bytes(1,byteorder='little')
 
-    for desc in midi_ble_dev.getDescriptors():
-            print(desc.handle, str(desc.uuid))
-            midi_ble_dev.readCharacteristic(desc.handle) 
+        mask_header    = b'\x7f'
+        mask_timestamp = b'\x3f'
+        # https://devzone.nordicsemi.com/nordic/short-range-guides/b/bluetooth-low-energy/posts/midi-over-bluetooth-le
+        header    = ((mask_header[0]    & unix_time[0]) | b'\x80'[0]).to_bytes(1,byteorder='little') #0b10000000
+        timestamp = ((mask_timestamp[0] & unix_time[0]) | b'\x80'[0]).to_bytes(1,byteorder='little') #0b10000000
 
-    print(midi_ble_dev.readCharacteristic(getNotificationHandle(midi_ble_dev,'2a00')))
+        status_note = b'\x90'
 
-    print(midi_ble_dev.readCharacteristic(midi_ble_notify_handle))
+        return header + timestamp + status_note + data
+
+
+    def play_note(self,note, force):
+        note  = note_string_to_midi(note)
+        force = int_to_byte(force)
+
+        msg = self.construct_msg(self.lookup_status['note_on_ch0'],note + force)
+        self.midi_ble_dev.writeCharacteristic(16,msg)
+
+    def get_handle(self,uuid):
+        return self.handle_table.loc[self.handle_table['uuid_str'].str.contains(uuid)].at[0,'handle']
+
+    def get_uuid(self,handle):
+        return self.handle_table.loc[self.handle_table['handle'] == handle].at[0,'uuid_bytes']
+
+    def read_all_characteristics(self):
+        for _,row in self.handle_table.iterrows():
+            self.midi_ble_dev.readCharacteristic(row['handle'])
+
+    def __init__(self,mac_addr):
+        self.midi_ble_dev = btle.Peripheral(mac_addr,"random")
+        self.midi_ble_service = self.midi_ble_dev.getServiceByUUID(self.service_uuid)
+        self.midi_ble_characteristic = self.midi_ble_service.getCharacteristics(self.characteristic_uuid)[0]
+
+        self.build_handle_table()
+
+        self.read_all_characteristics()
+
+        print(f"Type of piano: {self.midi_ble_dev.readCharacteristic(self.get_handle('2a00'))}")
+
+        # # # Enable notifications
+        # self.midi_ble_dev.writeCharacteristic(self.midi_ble_notify_handle,self.setup_data,withResponse=True)
+        # if not self.midi_ble_dev.readCharacteristic(midi_ble_notify_handle) == b'\x01\x00':
+        #     print("Notification not correctly set in descriptor")
+
+    def disconnect(self):
+        self.midi_ble_dev.disconnect()
+
+
+
+fp10 = RolandPiano(mac_addr_roland_fp_10)
+
+fp10.play_note("C-3",50)
+time.sleep(1)
+fp10.play_note("C-4",50)
+fp10.disconnect()
+
+
+
+
+
+
+
 
      
 
-    play_note(midi_ble_dev,"C-0",50)
-    play_note(midi_ble_dev,"C-1",50)
-    play_note(midi_ble_dev,"C-2",50)
-    play_note(midi_ble_dev,"C-3",50)
-    play_note(midi_ble_dev,"C-4",50)
-    play_note(midi_ble_dev,"C-5",50)
-    play_note(midi_ble_dev,"C-6",50)
     
 
 
     
-finally:
-    if midi_ble_dev:
-        midi_ble_dev.disconnect()
-        print("Disconnected")   
 
