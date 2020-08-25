@@ -129,11 +129,10 @@ mac_addr_roland_fp_10        = "c3:14:a9:3e:8f:77"
 
 
 
-class RolandPiano():
+class RolandPiano(btle.Peripheral):
     service_uuid        = "03b80e5a-ede8-4b33-a751-6ce34ec4c700"
     characteristic_uuid = "7772e5db-3868-4112-a1a9-f2669d106bf3"
     setup_data = b"\x01\x00"
-    midi_ble_dev = None
 
     lookup_status = {
         'note_on_ch0' : b'\x90'}
@@ -142,7 +141,7 @@ class RolandPiano():
     def build_handle_table(self):
         cols = ['handle','uuid_bytes','uuid_str']
         rows = []
-        for desc in self.midi_ble_dev.getDescriptors():
+        for desc in self.getDescriptors():
             rows.append(pd.DataFrame([{'handle' : desc.handle, 'uuid_bytes' : desc.uuid, 'uuid_str' : str(desc.uuid)}],columns = cols))
 
         self.handle_table = pd.concat(rows)
@@ -166,7 +165,7 @@ class RolandPiano():
         force = int_to_byte(force)
 
         msg = self.construct_msg(self.lookup_status['note_on_ch0'],note + force)
-        self.midi_ble_dev.writeCharacteristic(16,msg)
+        self.writeCharacteristic(16,msg)
 
     def get_handle(self,uuid):
         return self.handle_table.loc[self.handle_table['uuid_str'].str.contains(uuid)].at[0,'handle']
@@ -176,26 +175,25 @@ class RolandPiano():
 
     def read_all_characteristics(self):
         for _,row in self.handle_table.iterrows():
-            self.midi_ble_dev.readCharacteristic(row['handle'])
+            self.readCharacteristic(row['handle'])
 
     def __init__(self,mac_addr):
-        self.midi_ble_dev = btle.Peripheral(mac_addr,"random")
-        self.midi_ble_service = self.midi_ble_dev.getServiceByUUID(self.service_uuid)
+        btle.Peripheral.__init__(self, mac_addr,"random")
+        # self.midi_ble_dev = btle.Peripheral
+        self.midi_ble_service = self.getServiceByUUID(self.service_uuid)
         self.midi_ble_characteristic = self.midi_ble_service.getCharacteristics(self.characteristic_uuid)[0]
 
         self.build_handle_table()
 
         self.read_all_characteristics()
 
-        print(f"Type of piano: {self.midi_ble_dev.readCharacteristic(self.get_handle('2a00'))}")
+        print(f"Type of piano: {self.readCharacteristic(self.get_handle('2a00'))}")
 
         # # # Enable notifications
         # self.midi_ble_dev.writeCharacteristic(self.midi_ble_notify_handle,self.setup_data,withResponse=True)
         # if not self.midi_ble_dev.readCharacteristic(midi_ble_notify_handle) == b'\x01\x00':
         #     print("Notification not correctly set in descriptor")
 
-    def disconnect(self):
-        self.midi_ble_dev.disconnect()
 
 
 
