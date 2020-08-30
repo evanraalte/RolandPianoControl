@@ -5,6 +5,9 @@ import pandas as pd
 # 2. Add the following lines in: /etc/bluetooth/main.conf
 #     EnableLE = true           # Enable Low Energy support. Default is false.
 #     AttributeServer = true    # Enable the GATT attribute server. Default is false.
+# Make sure BlueZ can understand BLE midi
+# https://tttapa.github.io/Pages/Ubuntu/Software-Installation/BlueZ.html
+
 
 # def enable_notify(self,  chara_uuid):
 #     notify = self.ble_conn.getCharacteristics(uuid=chara_uuid)[0]
@@ -19,7 +22,7 @@ class MyDelegate(btle.DefaultDelegate):
     def handleNotification(self, cHandle, data):
         # ... perhaps check cHandle
         # ... process 'data'
-        print(data)
+        print(f"Notification: {data.hex()}")
 
 
 addresses = {
@@ -177,6 +180,7 @@ class RolandPiano(btle.Peripheral):
 
         checksum = self.get_checksum(addr,data)
 
+        #a3c7 f041100000002811010007000000000870
         msg = header + timestamp + self.lut_midi['msg_start'] + \
             self.lut_midi['id_roland'] + \
             self.lut_midi['id_device'] + \
@@ -185,14 +189,19 @@ class RolandPiano(btle.Peripheral):
             self.lut_midi['cmd_read'] + \
             addr + \
             data + \
-            checksum + \
-            timestamp + \
-            self.lut_midi['msg_end']
+            checksum#  + \
+            # timestamp # + \
+            #self.lut_midi['msg_end']
         
         # TODO: check if msg exceeds BLE size
-        print(msg.hex())
-        self.writeCharacteristic(16,msg) #Response is via Notification, which is not working atm
-        
+        msg2 = header + timestamp + self.lut_midi['msg_end']
+        #a3c7 f7
+
+        # print(msg.hex())
+        # print(msg2.hex())
+        self.writeCharacteristic(16,msg,withResponse=False) #Response is via Notification, which is not working atm
+        self.writeCharacteristic(16,msg2,withResponse=False) #Response is via Notification, which is not working atm
+        self.waitForNotifications(1.0)
         # <header> <timestamp> f0 41 10 00 00 00 28 12 <addr 4> <data 4> <checksum> <timestamp>
         pass
 
@@ -215,7 +224,7 @@ class RolandPiano(btle.Peripheral):
             timestamp + \
             self.lut_midi['msg_end']
 
-        print(msg.hex())
+        # print(msg.hex())
         self.writeCharacteristic(16,msg) #Response is via Notification, which is not working atm
 
         pass
@@ -262,10 +271,11 @@ class RolandPiano(btle.Peripheral):
         print(f"Type of piano: {self.readCharacteristic(self.get_handle('2a00'))}") # device_name
 
         # Enable notifications (Not working)
-        self.writeCharacteristic(self.get_handle('2902'),self.setup_data,withResponse=True)
-        if not self.readCharacteristic(self.get_handle('2902')) == setup_data:
-            print("Notification not correctly set in descriptor")
         self.setDelegate(MyDelegate())
+        
+        self.writeCharacteristic(self.get_handle('2902'),self.setup_data,withResponse=False)
+        if not self.readCharacteristic(self.get_handle('2902')) == self.setup_data:
+            print("Notification not correctly set in descriptor")
 
 
 
@@ -277,10 +287,28 @@ fp10 = RolandPiano(mac_addr_roland_fp_10)
 fp10.play_note("C-3",50)
 time.sleep(1)
 fp10.play_note("C-4",50)
-fp10.read_register(addresses['uptime'])
+# fp10.read_register(addresses['masterVolume'])
+# if fp10.waitForNotifications(1.0):
+#     print("Got notification!")
+# print(str(fp10.readCharacteristic(16)))
 fp10.write_register(addresses['connection'],b"\x01")
+
+
+for i in range(0,10):
+    print(f"XXXXXXXXXX write volume {i}")
+    fp10.write_register(addresses['masterVolume'],int_to_byte(i))
+    time.sleep(1)
+    print(f"XXXXXXXXXX read volume {i}")
+    fp10.read_register(addresses['masterVolume'])
+    time.sleep(1)
+while True:
+    if fp10.waitForNotifications(1.0):
+        print("Got notifcation")
+        continue
+    # print("Waiting..")
+    
 # fp10.write_register(addresses['applicationMode'],b"\x01")
-fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
+# fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
 # fp10.write_register(addresses['metronomeBeat'],b"\x10")
 
 
