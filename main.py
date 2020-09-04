@@ -14,16 +14,50 @@ import pandas as pd
 #     notify_handle = notify.getHandle() + 1
 #     self.ble_conn.writeCharacteristic(notify_handle, setup_data, withResponse=True)
 
+# https://eli.thegreenplace.net/2009/08/20/frames-and-protocols-for-the-serial-port-in-python
+from enum import Enum
+
+
+class Message():
+    timestamp   = b""
+
+    buf = b""
+    def __init__(self):
+        pass
+    def append(self,data):
+        if data[0] != self.timestamp:
+            # new message, discard old message
+            self.buf = b""
+            self.timestamp = data[0]
+            self.buf = data[1:]
+        else: 
+            self.buf += data[1:]
+        if (b'\xf7' in self.buf):
+            self.buf = self.buf.split(b'\xf7')[0]+b'\xf7'
+            return (True,self.buf)
+        else:
+            return (False,b"")
+    def decode(self):
+        h = self.buf.hex()
+        cmd_write = (h[16:16+2] == "12")
+        address   = h[18:18+8]
+        checksum  = h[len(h)-4:len(h)-2]
+        data      = h[26:len(h)-4]
+        return (cmd_write,address,data,checksum)
+
+
 class MyDelegate(btle.DefaultDelegate):
+    message = Message()
     def __init__(self, params = None):
         btle.DefaultDelegate.__init__(self)
         # ... initialise here
 
     def handleNotification(self, cHandle, data):
-        # ... perhaps check cHandle
-        # ... process 'data'
-        print(f"Notification: {data.hex()}")
-
+        # print(f"Handle notification, data: {data}")
+        (parsedSuccessful, msg) = self.message.append(data)
+        if parsedSuccessful:
+            print(msg.hex())
+            print(self.message.decode())
 
 addresses = {
     # 010000xx
@@ -173,7 +207,7 @@ class RolandPiano(btle.Peripheral):
             total += b        
         return int_to_byte(128 - (total % 128))        
 
-    def read_register(self,addr,data = b"\x00\x00\x00\x08"):
+    def read_register(self,addr,data = b"\x00\x00\x00\x01"):
         ut        = self.get_unix_time()
         header    = self.get_header(ut)
         timestamp = self.get_timestamp(ut)
@@ -292,23 +326,29 @@ fp10.play_note("C-4",50)
 #     print("Got notification!")
 # print(str(fp10.readCharacteristic(16)))
 fp10.write_register(addresses['connection'],b"\x01")
+# fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
 
 
-for i in range(0,10):
-    print(f"XXXXXXXXXX write volume {i}")
-    fp10.write_register(addresses['masterVolume'],int_to_byte(i))
+def int_to_metronome(i):
+    return b"\x00" + int_to_byte(i)
+
+fp10.write_register(addresses['sequencerTempoWO'],b"\x00\x4b")
+
+for i in range(0,100,10):
+    print(f"XXXXXXXXXX write metronome {i} (0x{hex(i)})")
+    fp10.write_register(addresses['sequencerTempoWO'],int_to_metronome(i))
     time.sleep(1)
-    print(f"XXXXXXXXXX read volume {i}")
-    fp10.read_register(addresses['masterVolume'])
+    print(f"XXXXXXXXXX read metronome {i}")
+    fp10.read_register(addresses['sequencerTempoWO'])
     time.sleep(1)
-while True:
-    if fp10.waitForNotifications(1.0):
-        print("Got notifcation")
-        continue
+
+# fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
+# while True:
+#     if fp10.waitForNotifications(1.0):
+#         continue
     # print("Waiting..")
     
 # fp10.write_register(addresses['applicationMode'],b"\x01")
-# fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
 # fp10.write_register(addresses['metronomeBeat'],b"\x10")
 
 
