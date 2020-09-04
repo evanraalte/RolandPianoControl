@@ -249,8 +249,9 @@ class RolandPiano(btle.Peripheral):
         # print(msg.hex())
         # print(msg2.hex())
         self.writeCharacteristic(16,msg,withResponse=False) #Response is via Notification, which is not working atm
+        # self.waitForNotifications(2.0)
         self.writeCharacteristic(16,msg2,withResponse=False) #Response is via Notification, which is not working atm
-        self.waitForNotifications(5.0)
+        self.waitForNotifications(2.0)
         # <header> <timestamp> f0 41 10 00 00 00 28 12 <addr 4> <data 4> <checksum> <timestamp>
         pass
 
@@ -276,7 +277,7 @@ class RolandPiano(btle.Peripheral):
 
         # print(msg.hex())
         self.writeCharacteristic(16,msg) #Response is via Notification, which is not working atm
-        self.waitForNotifications(5.0)
+        self.waitForNotifications(2.0)
         pass
 
     def get_header(self,unix_time):
@@ -327,9 +328,21 @@ class RolandPiano(btle.Peripheral):
         if not self.readCharacteristic(self.get_handle('2902')) == self.setup_data:
             print("Notification not correctly set in descriptor")
         self.write_register('connection',b"\x01")
-        self.play_note("C-3",50)
-        time.sleep(0.5)
-        self.play_note("C-4",50)
+        self.play_note("D-6",50)
+        time.sleep(0.8)
+        self.play_note("D-5",50)
+        time.sleep(0.2)
+        self.play_note("A-5",50)
+        time.sleep(0.4)
+        self.play_note("G-5",50)
+        time.sleep(0.4)
+        self.play_note("D-5",50)
+        time.sleep(0.4)
+        self.play_note("D-6",50)
+        time.sleep(0.4)
+        self.play_note("A-6",50)
+        self.play_note("A-5",50)
+
 
 
 
@@ -347,8 +360,10 @@ fp10.write_register('masterVolume',b"\x5c")
 print(f"XXXXXXXXXX read metronome")
 fp10.read_register('sequencerTempoWO')
 
+
+while True:
+    fp10.read_register('masterVolume')
 print(f"XXXXXXXXXX masterVolume")
-fp10.read_register('masterVolume')
 
 
 # fp10.read_register(addresses['sequencerTempoWO'])
