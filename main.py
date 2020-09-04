@@ -41,8 +41,8 @@ class Message():
         h = self.buf.hex()
         cmd_write = (h[16:16+2] == "12")
         address   = h[18:18+8]
-        checksum  = h[len(h)-4:len(h)-2]
-        data      = h[26:len(h)-4]
+        checksum  = h[len(h)-6:len(h)-4]
+        data      = h[26:len(h)-6]
         return (cmd_write,address,data,checksum)
 
 
@@ -58,6 +58,19 @@ class MyDelegate(btle.DefaultDelegate):
         if parsedSuccessful:
             print(msg.hex())
             print(self.message.decode())
+
+addressSizeMap = {  # consider implementing this to read all registers
+    "sequencerMeasure" : 2,
+    "sequencerTempoWO" : 2,
+    "masterTuning"     : 2
+}
+
+def getAddressSize(addressName):
+    if addressName in addressSizeMap:
+        return addressSizeMap[addressName]
+    else:
+        return 1
+
 
 addresses = {
     # 010000xx
@@ -207,7 +220,9 @@ class RolandPiano(btle.Peripheral):
             total += b        
         return int_to_byte(128 - (total % 128))        
 
-    def read_register(self,addr,data = b"\x00\x00\x00\x01"):
+    def read_register(self,addressName):
+        addr = addresses[addressName]
+        data = b"\x00\x00\x00" + int_to_byte(getAddressSize(addressName))
         ut        = self.get_unix_time()
         header    = self.get_header(ut)
         timestamp = self.get_timestamp(ut)
@@ -235,11 +250,12 @@ class RolandPiano(btle.Peripheral):
         # print(msg2.hex())
         self.writeCharacteristic(16,msg,withResponse=False) #Response is via Notification, which is not working atm
         self.writeCharacteristic(16,msg2,withResponse=False) #Response is via Notification, which is not working atm
-        self.waitForNotifications(1.0)
+        self.waitForNotifications(5.0)
         # <header> <timestamp> f0 41 10 00 00 00 28 12 <addr 4> <data 4> <checksum> <timestamp>
         pass
 
-    def write_register(self,addr,data):
+    def write_register(self,addressName,data):
+        addr = addresses[addressName]
         ut        = self.get_unix_time()
         header    = self.get_header(ut)
         timestamp = self.get_timestamp(ut)
@@ -260,7 +276,7 @@ class RolandPiano(btle.Peripheral):
 
         # print(msg.hex())
         self.writeCharacteristic(16,msg) #Response is via Notification, which is not working atm
-
+        self.waitForNotifications(5.0)
         pass
 
     def get_header(self,unix_time):
@@ -310,43 +326,38 @@ class RolandPiano(btle.Peripheral):
         self.writeCharacteristic(self.get_handle('2902'),self.setup_data,withResponse=False)
         if not self.readCharacteristic(self.get_handle('2902')) == self.setup_data:
             print("Notification not correctly set in descriptor")
+        self.write_register('connection',b"\x01")
+        self.play_note("C-3",50)
+        time.sleep(0.5)
+        self.play_note("C-4",50)
 
-
-
-
-
-
-fp10 = RolandPiano(mac_addr_roland_fp_10)
-
-fp10.play_note("C-3",50)
-time.sleep(1)
-fp10.play_note("C-4",50)
-# fp10.read_register(addresses['masterVolume'])
-# if fp10.waitForNotifications(1.0):
-#     print("Got notification!")
-# print(str(fp10.readCharacteristic(16)))
-fp10.write_register(addresses['connection'],b"\x01")
-# fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
 
 
 def int_to_metronome(i):
     return b"\x00" + int_to_byte(i)
 
-fp10.write_register(addresses['sequencerTempoWO'],b"\x00\x4b")
 
-for i in range(0,100,10):
-    print(f"XXXXXXXXXX write metronome {i} (0x{hex(i)})")
-    fp10.write_register(addresses['sequencerTempoWO'],int_to_metronome(i))
-    time.sleep(1)
-    print(f"XXXXXXXXXX read metronome {i}")
-    fp10.read_register(addresses['sequencerTempoWO'])
-    time.sleep(1)
+fp10 = RolandPiano(mac_addr_roland_fp_10)
+
+
+fp10.write_register('sequencerTempoWO',b"\x00\x4b")
+fp10.write_register('masterVolume',b"\x5c")
+
+
+print(f"XXXXXXXXXX read metronome")
+fp10.read_register('sequencerTempoWO')
+
+print(f"XXXXXXXXXX masterVolume")
+fp10.read_register('masterVolume')
+
+
+# fp10.read_register(addresses['sequencerTempoWO'])
 
 # fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
-# while True:
-#     if fp10.waitForNotifications(1.0):
-#         continue
-    # print("Waiting..")
+while True:
+    if fp10.waitForNotifications(1.0):
+        continue
+    print("Waiting..")
     
 # fp10.write_register(addresses['applicationMode'],b"\x01")
 # fp10.write_register(addresses['metronomeBeat'],b"\x10")
