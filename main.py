@@ -79,7 +79,7 @@ class Message():
         return len(self.buf) >= (2+8+1+1)
 
     def isNewMsg(self, data):
-        return data[0:1] != self.header_byte
+        return data[0:1] != self.header_byte or data[1:2] != self.timestamp_byte
 
     def append(self,data):
         if self.isNewMsg(data):
