@@ -31,6 +31,8 @@ class Message():
         "roland_id"       : b'\x41\x10\x00\x00\x00\x28'
     }
 
+
+
     def __str__(self):
         buffer = ""
         buffer += f"buf: {self.buf}\n"
@@ -71,6 +73,9 @@ class Message():
     def isSysExMsg(self):
         return self.status_byte == self.lut['sysex_msg_start']
 
+    def timeStampChanged(self,data):
+        return self.timestamp_byte != data[2:3]
+
     def sysExMsgEnded(self):
         return (self.lut['sysex_msg_end'] in self.buf)
 
@@ -79,7 +84,12 @@ class Message():
         return len(self.buf) >= (2+8+1+1)
 
     def isNewMsg(self, data):
-        return data[0:1] != self.header_byte or data[1:2] != self.timestamp_byte
+        headerChanged = data[0:1] != self.header_byte
+        isMidiMsg = len(data) == 5 and (data[2:3] in [self.lut['note_on'],self.lut['note_off']])
+
+        # print(f"headerChanged: {headerChanged}, midiMsg: {isMidiMsg}")
+
+        return headerChanged or isMidiMsg
 
     def append(self,data):
         if self.isNewMsg(data):
@@ -117,29 +127,31 @@ class Message():
         else:
             return False
 
+    def get_checksum(self,addr,data):
+        total = 0
+        for b in addr:
+            total += b
+        for b in data:
+            total += b        
+        return int_to_byte(128 - (total % 128))  
+
     def isValidRolandMsg(self):
-        #TODO: evaluate checksum
-        return self.man_id == self.lut['roland_id'] and self.cmd and self.address and self.checksum and self.data
+        cmp_checksum = self.get_checksum(self.address, self.data)
+        # print(f"comparing {cmp_checksum.hex()} and {self.checksum.hex()}")
+        return self.man_id == self.lut['roland_id'] and self.cmd and self.address and self.checksum == cmp_checksum and self.data
 
 
     def decode(self):
         if self.isAudioMsg():
             if self.isValidAudioMsg():
-                print(f"{self.status_byte.hex()} - note: {self.note.hex()}, velocity: {self.velocity.hex()}")
+                # print(f"{self.status_byte.hex()} - note: {self.note.hex()}, velocity: {self.velocity.hex()}")
                 return 0
 
         elif self.isSysExMsg():
             if self.isValidRolandMsg():
-                print(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
+                # print(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
                 return 0
-        else:
-            return -1
-
-        # cmd_write = (h[16:16+2] == "12")
-        # address   = h[18:18+8]
-        # checksum  = h[len(h)-6:len(h)-4]
-        # data      = h[26:len(h)-6]
-        # return (1,(cmd_write,address,data,checksum))
+        return -1
 
 
 class MyDelegate(btle.DefaultDelegate):
@@ -149,7 +161,7 @@ class MyDelegate(btle.DefaultDelegate):
         # ... initialise here
 
     def handleNotification(self, cHandle, data):
-        print(f"Handle notification, data: {data.hex()}")
+        # print(f"Handle notification, data: {data.hex()}")
         parsedSuccessful = self.message.append(data)
         if parsedSuccessful:
             self.message.decode()
