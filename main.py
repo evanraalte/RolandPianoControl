@@ -19,31 +19,127 @@ from enum import Enum
 
 
 class Message():
-    timestamp   = b""
+    header_byte   = b""
 
     buf = b""
+
+    lut = {
+        "note_on"         : b'\x80',
+        "note_off"        : b'\x90',
+        "sysex_msg_start" : b'\xf0',
+        "sysex_msg_end"   : b'\xf7',
+        "roland_id"       : b'\x41\x10\x00\x00\x00\x28'
+    }
+
+    def __str__(self):
+        buffer = ""
+        buffer += f"buf: {self.buf}\n"
+        buffer += f"header_byte: {self.header_byte}, timestamp_byte: {self.timestamp_byte}\n"
+        buffer += f"status_byte: {self.status_byte}\n"
+
+        buffer += f"note: {self.note}, velocity: {self.velocity}\n"
+
+        return buffer
+        
+
     def __init__(self):
         pass
+
+    def reset(self):
+        self.buf = b""
+        self.header_byte    = None
+        self.timestamp_byte = None
+        self.status_byte    = None
+
+        self.note           = None
+        self.velocity       = None
+
+        self.man_id         = None
+        self.cmd            = None
+        self.address        = None
+        self.data           = None
+        self.checksum       = None
+        return
+
+
+    def isAudioMsg(self):
+        return self.status_byte in [self.lut['note_on'], self.lut['note_off']]
+
+    def isValidAudioMsg(self):
+        return self.status_byte and self.note and self.velocity
+    
+    def isSysExMsg(self):
+        return self.status_byte == self.lut['sysex_msg_start']
+
+    def sysExMsgEnded(self):
+        return (self.lut['sysex_msg_end'] in self.buf)
+
+    def validSysExMsgLength(self):
+        # cmd (2) + address (8) + data (>=1) + checksum (1)
+        return len(self.buf) >= (2+8+1+1)
+
+    def isNewMsg(self, data):
+        return data[0:1] != self.header_byte
+
     def append(self,data):
-        if data[0] != self.timestamp:
+        if self.isNewMsg(data):
             # new message, discard old message
-            self.buf = b""
-            self.timestamp = data[0]
-            self.buf = data[1:]
+            self.reset()
+            try:
+                self.header_byte    = data[0:1]
+                self.timestamp_byte = data[1:2]
+                self.status_byte    = data[2:3]
+                self.buf            = data[3:]
+            except Exception:
+                print("invalid data, discarding..")
+                return False
+
+            if self.isAudioMsg():
+                try:
+                    self.note     = self.buf[0:1]
+                    self.velocity = self.buf[1:2]
+                except Exception:
+                    print("invalid data, discarding..")
+                    return False  
+                return True
         else: 
-            self.buf += data[1:]
-        if (b'\xf7' in self.buf):
-            self.buf = self.buf.split(b'\xf7')[0]+b'\xf7'
-            return (True,self.buf)
+            self.buf += data[1:] # append message
+    
+        if self.isSysExMsg() and self.sysExMsgEnded() and self.validSysExMsgLength():
+            self.buf      = self.buf.split(b'\xf7')[0] # cut the message at the end
+            self.man_id   = self.buf[0:6]
+            self.cmd      = self.buf[6:6+1]
+            self.address  = self.buf[7:7+4]
+            l             = len(self.buf)
+            self.checksum = self.buf[l-2:l-1] 
+            self.data     = self.buf[11:l-2]
+            return True
         else:
-            return (False,b"")
+            return False
+
+    def isValidRolandMsg(self):
+        #TODO: evaluate checksum
+        return self.man_id == self.lut['roland_id'] and self.cmd and self.address and self.checksum and self.data
+
+
     def decode(self):
-        h = self.buf.hex()
-        cmd_write = (h[16:16+2] == "12")
-        address   = h[18:18+8]
-        checksum  = h[len(h)-6:len(h)-4]
-        data      = h[26:len(h)-6]
-        return (cmd_write,address,data,checksum)
+        if self.isAudioMsg():
+            if self.isValidAudioMsg():
+                print(f"{self.status_byte.hex()} - note: {self.note.hex()}, velocity: {self.velocity.hex()}")
+                return 0
+
+        elif self.isSysExMsg():
+            if self.isValidRolandMsg():
+                print(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
+                return 0
+        else:
+            return -1
+
+        # cmd_write = (h[16:16+2] == "12")
+        # address   = h[18:18+8]
+        # checksum  = h[len(h)-6:len(h)-4]
+        # data      = h[26:len(h)-6]
+        # return (1,(cmd_write,address,data,checksum))
 
 
 class MyDelegate(btle.DefaultDelegate):
@@ -53,11 +149,13 @@ class MyDelegate(btle.DefaultDelegate):
         # ... initialise here
 
     def handleNotification(self, cHandle, data):
-        # print(f"Handle notification, data: {data}")
-        (parsedSuccessful, msg) = self.message.append(data)
+        print(f"Handle notification, data: {data.hex()}")
+        parsedSuccessful = self.message.append(data)
         if parsedSuccessful:
-            print(msg.hex())
-            print(self.message.decode())
+            self.message.decode()
+        else:
+            print("Not a valid message")
+            print(self.message)
 
 addressSizeMap = {  # consider implementing this to read all registers
     "sequencerMeasure" : 2,
@@ -319,7 +417,7 @@ class RolandPiano(btle.Peripheral):
 
         self.read_all_characteristics()
 
-        print(f"Type of piano: {self.readCharacteristic(self.get_handle('2a00'))}") # device_name
+        # print(f"Type of piano: {self.readCharacteristic(self.get_handle('2a00'))}") # device_name
 
         # Enable notifications (Not working)
         self.setDelegate(MyDelegate())
@@ -328,20 +426,21 @@ class RolandPiano(btle.Peripheral):
         if not self.readCharacteristic(self.get_handle('2902')) == self.setup_data:
             print("Notification not correctly set in descriptor")
         self.write_register('connection',b"\x01")
-        self.play_note("D-6",50)
-        time.sleep(0.8)
-        self.play_note("D-5",50)
-        time.sleep(0.2)
-        self.play_note("A-5",50)
-        time.sleep(0.4)
-        self.play_note("G-5",50)
-        time.sleep(0.4)
-        self.play_note("D-5",50)
-        time.sleep(0.4)
-        self.play_note("D-6",50)
-        time.sleep(0.4)
-        self.play_note("A-6",50)
-        self.play_note("A-5",50)
+        print("Connection established")
+        # self.play_note("D-6",50)
+        # time.sleep(0.8)
+        # self.play_note("D-5",50)
+        # time.sleep(0.2)
+        # self.play_note("A-5",50)
+        # time.sleep(0.4)
+        # self.play_note("G-5",50)
+        # time.sleep(0.4)
+        # self.play_note("D-5",50)
+        # time.sleep(0.4)
+        # self.play_note("D-6",50)
+        # time.sleep(0.4)
+        # self.play_note("A-6",50)
+        # self.play_note("A-5",50)
 
 
 
@@ -353,47 +452,19 @@ def int_to_metronome(i):
 fp10 = RolandPiano(mac_addr_roland_fp_10)
 
 
-fp10.write_register('sequencerTempoWO',b"\x00\x4b")
-fp10.write_register('masterVolume',b"\x5c")
+# fp10.write_register('sequencerTempoWO',b"\x00\x4b")
+# fp10.write_register('masterVolume',b"\x5c")
 
-
-print(f"XXXXXXXXXX read metronome")
 fp10.read_register('sequencerTempoWO')
+fp10.read_register('masterVolume')
 
-
-while True:
-    fp10.read_register('masterVolume')
-print(f"XXXXXXXXXX masterVolume")
-
-
-# fp10.read_register(addresses['sequencerTempoWO'])
-
-# fp10.write_register(addresses['metronomeSwToggle'],b"\x00")
 while True:
     if fp10.waitForNotifications(1.0):
         continue
-    print("Waiting..")
+    # print("Waiting..")
     
-# fp10.write_register(addresses['applicationMode'],b"\x01")
-# fp10.write_register(addresses['metronomeBeat'],b"\x10")
-
-
-# fp10.write_register(addresses['masterVolume'],b"\x7f")
-# time.sleep(1)
-# fp10.write_register(addresses['masterVolume'],b"\x00")
-# time.sleep(1)
-# fp10.write_register(addresses['masterVolume'],b"\x32")
-
-# write connection 1
-# write applicationMode 1
-# read sequencer status
-# read metronomeStatus
-
 
 fp10.disconnect()
-
-#connect app, go to first screen, go to second screen, on 72 258 75 off
-
 
 
 
