@@ -26,6 +26,7 @@ class Message():
     lut = {
         "note_on"         : b'\x80',
         "note_off"        : b'\x90',
+        "control_change"  : b'\xb0',
         "sysex_msg_start" : b'\xf0',
         "sysex_msg_end"   : b'\xf7',
         "roland_id"       : b'\x41\x10\x00\x00\x00\x28'
@@ -35,7 +36,7 @@ class Message():
 
     def __str__(self):
         buffer = ""
-        buffer += f"buf: {self.buf}\n"
+        buffer += f"buf: {self.buf.hex()}\n"
         buffer += f"header_byte: {self.header_byte}, timestamp_byte: {self.timestamp_byte}\n"
         buffer += f"status_byte: {self.status_byte}\n"
 
@@ -63,9 +64,11 @@ class Message():
         self.checksum       = None
         return
 
+    def getAudioStatusCodes(self):
+        return [self.lut['note_on'], self.lut['note_off'], self.lut['control_change']]
 
     def isAudioMsg(self):
-        return self.status_byte in [self.lut['note_on'], self.lut['note_off']]
+        return self.status_byte in self.getAudioStatusCodes()
 
     def isValidAudioMsg(self):
         return self.status_byte and self.note and self.velocity
@@ -85,7 +88,7 @@ class Message():
 
     def isNewMsg(self, data):
         headerChanged = data[0:1] != self.header_byte
-        isMidiMsg = len(data) == 5 and (data[2:3] in [self.lut['note_on'],self.lut['note_off']])
+        isMidiMsg = len(data) == 5 and (data[2:3] in self.getAudioStatusCodes())
 
         # print(f"headerChanged: {headerChanged}, midiMsg: {isMidiMsg}")
 
@@ -101,17 +104,15 @@ class Message():
                 self.status_byte    = data[2:3]
                 self.buf            = data[3:]
             except Exception:
-                print("invalid data, discarding..")
-                return False
+                return -1 # done, with errors
 
             if self.isAudioMsg():
                 try:
                     self.note     = self.buf[0:1]
                     self.velocity = self.buf[1:2]
                 except Exception:
-                    print("invalid data, discarding..")
-                    return False  
-                return True
+                    return -1  # done, with errors
+                return 1 # done
         else: 
             self.buf += data[1:] # append message
     
@@ -123,9 +124,9 @@ class Message():
             l             = len(self.buf)
             self.checksum = self.buf[l-2:l-1] 
             self.data     = self.buf[11:l-2]
-            return True
+            return 1 # done succesfully
         else:
-            return False
+            return 0 # not done
 
     def get_checksum(self,addr,data):
         total = 0
@@ -144,12 +145,12 @@ class Message():
     def decode(self):
         if self.isAudioMsg():
             if self.isValidAudioMsg():
-                # print(f"{self.status_byte.hex()} - note: {self.note.hex()}, velocity: {self.velocity.hex()}")
+                print(f"{self.status_byte.hex()} - note: {self.note.hex()}, velocity: {self.velocity.hex()}")
                 return 0
 
         elif self.isSysExMsg():
             if self.isValidRolandMsg():
-                # print(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
+                print(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
                 return 0
         return -1
 
@@ -161,11 +162,11 @@ class MyDelegate(btle.DefaultDelegate):
         # ... initialise here
 
     def handleNotification(self, cHandle, data):
-        # print(f"Handle notification, data: {data.hex()}")
-        parsedSuccessful = self.message.append(data)
-        if parsedSuccessful:
+        print(f"Handle notification, data: {data.hex()}")
+        status = self.message.append(data)
+        if status == 1:
             self.message.decode()
-        else:
+        elif status == -1:
             print("Not a valid message")
             print(self.message)
 
