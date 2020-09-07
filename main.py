@@ -478,25 +478,25 @@ def main():
     parser.add_argument('mac_addr',metavar = 'mac_addr', type=str, help="mac address of the piano")
     
     args = parser.parse_args()
-    fp10 = RolandPiano(args.mac_addr)
+    piano = RolandPiano(args.mac_addr)
 
     while True:
         try: 
 
             while True:
-                fp10.read_register('sequencerTempoWO')
-                fp10.read_register('masterVolume')
-                fp10.waitForNotifications(1.0)
+                piano.read_register('sequencerTempoWO')
+                piano.read_register('masterVolume')
+                piano.waitForNotifications(1.0)
 
         except btle.BTLEDisconnectError:
             log.error("Disconnected from device, attemping to reconnect")
-            if fp10.connect(mac_addr_roland_fp_10, 3):
+            if piano.connect(3):
                 continue
             else:
                 log.critical("Could not reconnect, exitting")
                 break
 
-    fp10.disconnect()
+    piano.disconnect()
 
 
 if __name__ == "__main__":
