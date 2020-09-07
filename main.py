@@ -9,13 +9,6 @@ import logging
 # Make sure BlueZ can understand BLE midi
 # https://tttapa.github.io/Pages/Ubuntu/Software-Installation/BlueZ.html
 
-
-# def enable_notify(self,  chara_uuid):
-#     notify = self.ble_conn.getCharacteristics(uuid=chara_uuid)[0]
-#     notify_handle = notify.getHandle() + 1
-#     self.ble_conn.writeCharacteristic(notify_handle, setup_data, withResponse=True)
-
-# https://eli.thegreenplace.net/2009/08/20/frames-and-protocols-for-the-serial-port-in-python
 from enum import Enum
 
 
@@ -92,9 +85,6 @@ class Message():
     def isNewMsg(self, data):
         headerChanged = data[0:1] != self.header_byte
         isMidiMsg = len(data) == 5 and (data[2:3] in self.getAudioStatusCodes())
-
-        # print(f"headerChanged: {headerChanged}, midiMsg: {isMidiMsg}")
-
         return headerChanged or isMidiMsg
 
     def append(self,data):
@@ -114,28 +104,22 @@ class Message():
 
                 # len is 5 + (n*4)
                 # n is not larger than 2, so basically a message can hold 3 midi audio updates. 
-                # note and velocity should be lists.. 
-                # also, status could differ between the messages, so that must be handled.
+                #TODO: write more elegantly
 
-                if len(self.buf) == 2:
+                if len(self.buf) == 2: # Contains one midi msg
                     try:
-                        # print("TTTTT")
                         self.status_bytes = [self.status_byte]
                         self.notes     = [self.buf[0:1]]
                         self.velocities = [self.buf[1:2]]
                     except Exception:
                         return -1  # done, with errors
-                elif len(self.buf) == 6:
+                elif len(self.buf) == 6: # Contains two midi msgs ('compressed')
                     try:
-                        # print("XXXXX")
                         self.status_bytes = [self.status_byte, self.buf[3:4]]
                         self.notes     = [self.buf[0:1],self.buf[4:4+1]]
                         self.velocities = [self.buf[1:2],self.buf[5:5+1]]
                     except Exception:
                         return -1  # done, with errors
-                else:
-                    pass
-                    # print("ZZZZZZZZz")
                 return 1 # done
         else: 
             self.buf += data[1:] # append message
@@ -183,10 +167,8 @@ class MyDelegate(btle.DefaultDelegate):
     message = Message()
     def __init__(self, params = None):
         btle.DefaultDelegate.__init__(self)
-        # ... initialise here
 
     def handleNotification(self, cHandle, data):
-        # print(f"Handle notification, data: {data.hex()}")
         status = self.message.append(data)
         if status == 1:
             self.message.decode()
@@ -313,10 +295,6 @@ def note_string_to_midi(midstr):
 
 
 
-mac_addr_roland_fp_10        = "c3:14:a9:3e:8f:77"  
-
-
-
 
 
 class RolandPiano(btle.Peripheral):
@@ -364,7 +342,7 @@ class RolandPiano(btle.Peripheral):
 
         checksum = self.get_checksum(addr,data)
 
-        #a3c7 f041100000002811010007000000000870
+        # TODO: lut best way to do this, seems overly configurable
         msg = header + timestamp + self.lut_midi['msg_start'] + \
             self.lut_midi['id_roland'] + \
             self.lut_midi['id_device'] + \
@@ -373,21 +351,13 @@ class RolandPiano(btle.Peripheral):
             self.lut_midi['cmd_read'] + \
             addr + \
             data + \
-            checksum#  + \
-            # timestamp # + \
-            #self.lut_midi['msg_end']
-        
-        # TODO: check if msg exceeds BLE size
+            checksum  
         msg2 = header + timestamp + self.lut_midi['msg_end']
-        #a3c7 f7
 
-        # print(msg.hex())
-        # print(msg2.hex())
-        self.writeCharacteristic(16,msg,withResponse=False) #Response is via Notification, which is not working atm
-        # self.waitForNotifications(2.0)
-        self.writeCharacteristic(16,msg2,withResponse=False) #Response is via Notification, which is not working atm
+
+        self.writeCharacteristic(16,msg,withResponse=False)
+        self.writeCharacteristic(16,msg2,withResponse=False)
         self.waitForNotifications(2.0)
-        # <header> <timestamp> f0 41 10 00 00 00 28 12 <addr 4> <data 4> <checksum> <timestamp>
         pass
 
     def write_register(self,addressName,data):
@@ -410,8 +380,7 @@ class RolandPiano(btle.Peripheral):
             timestamp + \
             self.lut_midi['msg_end']
 
-        # print(msg.hex())
-        self.writeCharacteristic(16,msg) #Response is via Notification, which is not working atm
+        self.writeCharacteristic(16,msg)
         self.waitForNotifications(2.0)
         pass
 
@@ -500,7 +469,6 @@ def setup_logging():
     ch.setFormatter(formatter)
     log.addHandler(ch)
 
-
     #file handler
     fh = logging.FileHandler('main.log')
     # fh.setLevel(logging.DEBUG)
@@ -512,6 +480,7 @@ def setup_logging():
 
 
 def main():
+    mac_addr_roland_fp_10        = "c3:14:a9:3e:8f:77"  
     fp10 = RolandPiano(mac_addr_roland_fp_10)
 
     while True:
