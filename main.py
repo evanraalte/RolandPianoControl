@@ -1,16 +1,8 @@
+#!/usr/bin/python3
 from bluepy import btle
 import time
 import pandas as pd
 import logging
-# 1. Install library: https://github.com/IanHarvey/bluepy
-# 2. Add the following lines in: /etc/bluetooth/main.conf
-#     EnableLE = true           # Enable Low Energy support. Default is false.
-#     AttributeServer = true    # Enable the GATT attribute server. Default is false.
-# Make sure BlueZ can understand BLE midi
-# https://tttapa.github.io/Pages/Ubuntu/Software-Installation/BlueZ.html
-
-from enum import Enum
-
 
 class Message():
     header_byte   = b""
