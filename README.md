@@ -12,4 +12,4 @@
     ```
     https://tttapa.github.io/Pages/Ubuntu/Software-Installation/BlueZ.html
     ```
-4. Run application: `./main.py <mac_addr>`
+4. Run application: `./app.py <mac_addr>`

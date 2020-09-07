@@ -5,7 +5,6 @@ from bluepy import btle
 import logging
 import yaml
 
-
 def main():
     log.info("Exit cmd given by user, disconnecting..")
     piano = None
