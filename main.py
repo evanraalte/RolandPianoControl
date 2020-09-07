@@ -1,6 +1,7 @@
 from bluepy import btle
 import time
 import pandas as pd
+import logging
 # 1. Install library: https://github.com/IanHarvey/bluepy
 # 2. Add the following lines in: /etc/bluetooth/main.conf
 #     EnableLE = true           # Enable Low Energy support. Default is false.
@@ -40,7 +41,8 @@ class Message():
         buffer += f"header_byte: {self.header_byte}, timestamp_byte: {self.timestamp_byte}\n"
         buffer += f"status_byte: {self.status_byte}\n"
 
-        buffer += f"note: {self.note}, velocity: {self.velocity}\n"
+        for idx,_ in enumerate(self.notes):
+            buffer += f"note: {self.notes[idx]}, velocity: {self.velocities[idx]}\n"
 
         return buffer
         
@@ -54,8 +56,9 @@ class Message():
         self.timestamp_byte = None
         self.status_byte    = None
 
-        self.note           = None
-        self.velocity       = None
+        self.status_bytes   = None
+        self.notes          = None
+        self.velocities     = None
 
         self.man_id         = None
         self.cmd            = None
@@ -71,7 +74,7 @@ class Message():
         return self.status_byte in self.getAudioStatusCodes()
 
     def isValidAudioMsg(self):
-        return self.status_byte and self.note and self.velocity
+        return self.status_byte and self.notes and self.velocities
     
     def isSysExMsg(self):
         return self.status_byte == self.lut['sysex_msg_start']
@@ -95,6 +98,7 @@ class Message():
         return headerChanged or isMidiMsg
 
     def append(self,data):
+        # print("GGGGGG")
         if self.isNewMsg(data):
             # new message, discard old message
             self.reset()
@@ -105,13 +109,33 @@ class Message():
                 self.buf            = data[3:]
             except Exception:
                 return -1 # done, with errors
-
+            # print("FFFF")
             if self.isAudioMsg():
-                try:
-                    self.note     = self.buf[0:1]
-                    self.velocity = self.buf[1:2]
-                except Exception:
-                    return -1  # done, with errors
+
+                # len is 5 + (n*4)
+                # n is not larger than 2, so basically a message can hold 3 midi audio updates. 
+                # note and velocity should be lists.. 
+                # also, status could differ between the messages, so that must be handled.
+
+                if len(self.buf) == 2:
+                    try:
+                        # print("TTTTT")
+                        self.status_bytes = [self.status_byte]
+                        self.notes     = [self.buf[0:1]]
+                        self.velocities = [self.buf[1:2]]
+                    except Exception:
+                        return -1  # done, with errors
+                elif len(self.buf) == 6:
+                    try:
+                        # print("XXXXX")
+                        self.status_bytes = [self.status_byte, self.buf[3:4]]
+                        self.notes     = [self.buf[0:1],self.buf[4:4+1]]
+                        self.velocities = [self.buf[1:2],self.buf[5:5+1]]
+                    except Exception:
+                        return -1  # done, with errors
+                else:
+                    pass
+                    # print("ZZZZZZZZz")
                 return 1 # done
         else: 
             self.buf += data[1:] # append message
@@ -138,19 +162,19 @@ class Message():
 
     def isValidRolandMsg(self):
         cmp_checksum = self.get_checksum(self.address, self.data)
-        # print(f"comparing {cmp_checksum.hex()} and {self.checksum.hex()}")
         return self.man_id == self.lut['roland_id'] and self.cmd and self.address and self.checksum == cmp_checksum and self.data
 
 
     def decode(self):
         if self.isAudioMsg():
             if self.isValidAudioMsg():
-                print(f"{self.status_byte.hex()} - note: {self.note.hex()}, velocity: {self.velocity.hex()}")
+                for idx,_ in enumerate(self.notes):
+                    log.debug(f"{self.status_bytes[idx].hex()} - note: {self.notes[idx].hex()}, velocity: {self.velocities[idx].hex()}")
                 return 0
 
         elif self.isSysExMsg():
             if self.isValidRolandMsg():
-                print(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
+                log.debug(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
                 return 0
         return -1
 
@@ -162,13 +186,13 @@ class MyDelegate(btle.DefaultDelegate):
         # ... initialise here
 
     def handleNotification(self, cHandle, data):
-        print(f"Handle notification, data: {data.hex()}")
+        # print(f"Handle notification, data: {data.hex()}")
         status = self.message.append(data)
         if status == 1:
             self.message.decode()
         elif status == -1:
-            print("Not a valid message")
-            print(self.message)
+            log.error("Not a valid message")
+            log.error(self.message)
 
 addressSizeMap = {  # consider implementing this to read all registers
     "sequencerMeasure" : 2,
@@ -421,8 +445,31 @@ class RolandPiano(btle.Peripheral):
         for _,row in self.handle_table.iterrows():
             self.readCharacteristic(row['handle'])
 
+    isInitialized = False
+    def connect(self, mac_addr, max_attempts):
+        for attempt_num in range(1,max_attempts+1):
+            try:
+                log.info(f"Attempt {attempt_num} to connect to {mac_addr}")
+                if not self.isInitialized:
+                    btle.Peripheral.__init__(self, mac_addr,"random")
+                    self.isInitialized = True
+                else:
+                    btle.Peripheral.connect(self,mac_addr,"random")
+                break
+            except Exception:
+                if attempt_num < max_attempts:
+                    continue
+                else:
+                    log.error(f"Was not able to connect to {mac_addr} after {max_attempts} attempts..")
+                    return False
+        log.info(f"Connection with {mac_addr} established")
+        return True
+                    
+
+
     def __init__(self,mac_addr):
-        btle.Peripheral.__init__(self, mac_addr,"random")
+        self.connect(mac_addr,3)
+
         self.midi_ble_service = self.getServiceByUUID(self.service_uuid)
         self.midi_ble_characteristic = self.midi_ble_service.getCharacteristics(self.characteristic_uuid)[0]
 
@@ -430,57 +477,65 @@ class RolandPiano(btle.Peripheral):
 
         self.read_all_characteristics()
 
-        # print(f"Type of piano: {self.readCharacteristic(self.get_handle('2a00'))}") # device_name
-
-        # Enable notifications (Not working)
         self.setDelegate(MyDelegate())
         
         self.writeCharacteristic(self.get_handle('2902'),self.setup_data,withResponse=False)
         if not self.readCharacteristic(self.get_handle('2902')) == self.setup_data:
-            print("Notification not correctly set in descriptor")
+            log.error("Notification not correctly set in descriptor")
         self.write_register('connection',b"\x01")
-        print("Connection established")
-        # self.play_note("D-6",50)
-        # time.sleep(0.8)
-        # self.play_note("D-5",50)
-        # time.sleep(0.2)
-        # self.play_note("A-5",50)
-        # time.sleep(0.4)
-        # self.play_note("G-5",50)
-        # time.sleep(0.4)
-        # self.play_note("D-5",50)
-        # time.sleep(0.4)
-        # self.play_note("D-6",50)
-        # time.sleep(0.4)
-        # self.play_note("A-6",50)
-        # self.play_note("A-5",50)
-
-
-
 
 def int_to_metronome(i):
     return b"\x00" + int_to_byte(i)
 
 
-fp10 = RolandPiano(mac_addr_roland_fp_10)
+def setup_logging():
+    log = logging.getLogger(__name__)
+    log.setLevel(logging.INFO)
+    # create formatter
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    #console handler
+    ch = logging.StreamHandler()
+    # ch.setLevel(logging.DEBUG)
+    ch.setFormatter(formatter)
+    log.addHandler(ch)
 
 
-# fp10.write_register('sequencerTempoWO',b"\x00\x4b")
-# fp10.write_register('masterVolume',b"\x5c")
+    #file handler
+    fh = logging.FileHandler('main.log')
+    # fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    log.addHandler(fh)
 
-fp10.read_register('sequencerTempoWO')
-fp10.read_register('masterVolume')
-
-while True:
-    if fp10.waitForNotifications(1.0):
-        continue
-    # print("Waiting..")
-    
-
-fp10.disconnect()
+    return log
 
 
 
+def main():
+    fp10 = RolandPiano(mac_addr_roland_fp_10)
+
+    while True:
+        try: 
+
+            while True:
+                fp10.read_register('sequencerTempoWO')
+                fp10.read_register('masterVolume')
+                fp10.waitForNotifications(1.0)
+
+        except btle.BTLEDisconnectError:
+            log.error("Disconnected from device, attemping to reconnect")
+            if fp10.connect(mac_addr_roland_fp_10, 3):
+                continue
+            else:
+                log.critical("Could not reconnect, exitting")
+                break
+
+    fp10.disconnect()
+
+
+if __name__ == "__main__":
+    log = setup_logging()
+    main()
 
 
      
