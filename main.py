@@ -3,7 +3,7 @@ from bluepy import btle
 import time
 import pandas as pd
 import logging
-
+import argparse 
 class Message():
     header_byte   = b""
 
@@ -407,29 +407,30 @@ class RolandPiano(btle.Peripheral):
             self.readCharacteristic(row['handle'])
 
     isInitialized = False
-    def connect(self, mac_addr, max_attempts):
+    def connect(self, max_attempts):
         for attempt_num in range(1,max_attempts+1):
             try:
-                log.info(f"Attempt {attempt_num} to connect to {mac_addr}")
+                log.info(f"Attempt {attempt_num} to connect to {self.mac_addr}")
                 if not self.isInitialized:
-                    btle.Peripheral.__init__(self, mac_addr,"random")
+                    btle.Peripheral.__init__(self, self.mac_addr,"random")
                     self.isInitialized = True
                 else:
-                    btle.Peripheral.connect(self,mac_addr,"random")
+                    btle.Peripheral.connect(self,self.mac_addr,"random")
                 break
             except Exception:
                 if attempt_num < max_attempts:
                     continue
                 else:
-                    log.error(f"Was not able to connect to {mac_addr} after {max_attempts} attempts..")
+                    log.error(f"Was not able to connect to {self.mac_addr} after {max_attempts} attempts..")
                     return False
-        log.info(f"Connection with {mac_addr} established")
+        log.info(f"Connection with {self.mac_addr} established")
         return True
                     
 
 
     def __init__(self,mac_addr):
-        self.connect(mac_addr,3)
+        self.mac_addr = mac_addr
+        self.connect(3)
 
         self.midi_ble_service = self.getServiceByUUID(self.service_uuid)
         self.midi_ble_characteristic = self.midi_ble_service.getCharacteristics(self.characteristic_uuid)[0]
@@ -472,8 +473,12 @@ def setup_logging():
 
 
 def main():
-    mac_addr_roland_fp_10        = "c3:14:a9:3e:8f:77"  
-    fp10 = RolandPiano(mac_addr_roland_fp_10)
+
+    parser = argparse.ArgumentParser(description='Connect to Roland fp-10 piano')
+    parser.add_argument('mac_addr',metavar = 'mac_addr', type=str, help="mac address of the piano")
+    
+    args = parser.parse_args()
+    fp10 = RolandPiano(args.mac_addr)
 
     while True:
         try: 
