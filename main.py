@@ -420,9 +420,9 @@ def int_to_metronome(i):
     return b"\x00" + int_to_byte(i)
 
 
-def setup_logging():
+def setup_logging(level):
     log = logging.getLogger(__name__)
-    log.setLevel(logging.DEBUG)
+    log.setLevel(level)
     # create formatter
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -443,34 +443,40 @@ def setup_logging():
 
 
 def main():
-
+    piano = None
     parser = argparse.ArgumentParser(description='Connect to Roland fp-10 piano')
     parser.add_argument('mac_addr',metavar = 'mac_addr', type=str, help="mac address of the piano")
+
     
     args = parser.parse_args()
-    piano = RolandPiano(args.mac_addr)
+    try:
+        piano = RolandPiano(args.mac_addr)
+        while True:
+            try: 
 
-    while True:
-        try: 
+                while True:
+                    piano.read_register('sequencerTempoWO')
+                    piano.read_register('masterVolume')
+                    piano.waitForNotifications(1.0)
 
-            while True:
-                piano.read_register('sequencerTempoWO')
-                piano.read_register('masterVolume')
-                piano.waitForNotifications(1.0)
+            except btle.BTLEDisconnectError:
+                log.error("Disconnected from device, attemping to reconnect")
+                if piano.connect(3):
+                    continue
+                else:
+                    log.critical("Could not reconnect, exitting")
+                    exit(1)
+    except KeyboardInterrupt:
+        log.info("Exit cmd given by user, disconnecting..")
+        if piano:
+            piano.disconnect()
 
-        except btle.BTLEDisconnectError:
-            log.error("Disconnected from device, attemping to reconnect")
-            if piano.connect(3):
-                continue
-            else:
-                log.critical("Could not reconnect, exitting")
-                break
 
-    piano.disconnect()
+
 
 
 if __name__ == "__main__":
-    log = setup_logging()
+    log = setup_logging(logging.DEBUG)
     main()
 
 
