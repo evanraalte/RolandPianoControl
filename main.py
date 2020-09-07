@@ -3,23 +3,24 @@ from bluepy import btle
 import time
 import pandas as pd
 import logging
-import argparse 
+import argparse
+
+lut = {
+    "note_on"         : b'\x80',
+    "note_off"        : b'\x90',
+    "control_change"  : b'\xb0',
+    "sysex_msg_start" : b'\xf0',
+    "sysex_msg_end"   : b'\xf7',
+    "cmd_read"        : b'\x11',
+    "cmd_write"       : b'\x12', 
+    "id_roland"       : b'\x41\x10\x00\x00\x00\x28'
+}
+
+
 class Message():
     header_byte   = b""
 
     buf = b""
-
-    lut = {
-        "note_on"         : b'\x80',
-        "note_off"        : b'\x90',
-        "control_change"  : b'\xb0',
-        "sysex_msg_start" : b'\xf0',
-        "sysex_msg_end"   : b'\xf7',
-        "roland_id"       : b'\x41\x10\x00\x00\x00\x28'
-    }
-
-
-
     def __str__(self):
         buffer = ""
         buffer += f"buf: {self.buf.hex()}\n"
@@ -53,7 +54,7 @@ class Message():
         return
 
     def getAudioStatusCodes(self):
-        return [self.lut['note_on'], self.lut['note_off'], self.lut['control_change']]
+        return [lut['note_on'], lut['note_off'], lut['control_change']]
 
     def isAudioMsg(self):
         return self.status_byte in self.getAudioStatusCodes()
@@ -62,13 +63,13 @@ class Message():
         return self.status_byte and self.notes and self.velocities
     
     def isSysExMsg(self):
-        return self.status_byte == self.lut['sysex_msg_start']
+        return self.status_byte == lut['sysex_msg_start']
 
     def timeStampChanged(self,data):
         return self.timestamp_byte != data[2:3]
 
     def sysExMsgEnded(self):
-        return (self.lut['sysex_msg_end'] in self.buf)
+        return (lut['sysex_msg_end'] in self.buf)
 
     def validSysExMsgLength(self):
         # cmd (2) + address (8) + data (>=1) + checksum (1)
@@ -117,7 +118,7 @@ class Message():
             self.buf += data[1:] # append message
     
         if self.isSysExMsg() and self.sysExMsgEnded() and self.validSysExMsgLength():
-            self.buf      = self.buf.split(b'\xf7')[0] # cut the message at the end
+            self.buf      = self.buf.split(lut['sysex_msg_end'])[0] # cut the message at the end
             self.man_id   = self.buf[0:6]
             self.cmd      = self.buf[6:6+1]
             self.address  = self.buf[7:7+4]
@@ -138,7 +139,7 @@ class Message():
 
     def isValidRolandMsg(self):
         cmp_checksum = self.get_checksum(self.address, self.data)
-        return self.man_id == self.lut['roland_id'] and self.cmd and self.address and self.checksum == cmp_checksum and self.data
+        return self.man_id == lut['id_roland'] and self.cmd and self.address and self.checksum == cmp_checksum and self.data
 
 
     def decode(self):
@@ -294,21 +295,7 @@ class RolandPiano(btle.Peripheral):
     characteristic_uuid = "7772e5db-3868-4112-a1a9-f2669d106bf3"
     setup_data = b"\x01\x00"
 
-    # http://www.chromakinetics.com/handsonic/rolSysEx.htm
-    lut_midi = {
-        'msg_start' : b'\xf0',
-        'msg_end'   : b'\xf7',
-        'id_roland' : b'\x41',
-        'id_device' : b'\x10',
-        'id_fp10'   : b'\x28', # This seems to be not bound to fp-10 actually
-        'cmd_write' : b'\x12',
-        'cmd_read'  : b'\x11',
-    }
-
-    lookup_status = {
-        'note_on_ch0' : b'\x90'}
-        
-
+    
     def build_handle_table(self):
         cols = ['handle','uuid_bytes','uuid_str']
         rows = []
@@ -326,8 +313,8 @@ class RolandPiano(btle.Peripheral):
         return int_to_byte(128 - (total % 128))        
 
     def read_register(self,addressName):
-        addr = addresses[addressName]
-        data = b"\x00\x00\x00" + int_to_byte(getAddressSize(addressName))
+        addr      = addresses[addressName]
+        data      = b"\x00\x00\x00" + int_to_byte(getAddressSize(addressName))
         ut        = self.get_unix_time()
         header    = self.get_header(ut)
         timestamp = self.get_timestamp(ut)
@@ -335,17 +322,13 @@ class RolandPiano(btle.Peripheral):
         checksum = self.get_checksum(addr,data)
 
         # TODO: lut best way to do this, seems overly configurable
-        msg = header + timestamp + self.lut_midi['msg_start'] + \
-            self.lut_midi['id_roland'] + \
-            self.lut_midi['id_device'] + \
-            b"\x00\x00\x00" + \
-            self.lut_midi['id_fp10'] + \
-            self.lut_midi['cmd_read'] + \
+        msg = header + timestamp + lut['sysex_msg_start'] + \
+            lut['id_roland'] + \
+            lut['cmd_read'] + \
             addr + \
             data + \
             checksum  
-        msg2 = header + timestamp + self.lut_midi['msg_end']
-
+        msg2 = header + timestamp + lut['sysex_msg_end']
 
         self.writeCharacteristic(16,msg,withResponse=False)
         self.writeCharacteristic(16,msg2,withResponse=False)
@@ -360,21 +343,18 @@ class RolandPiano(btle.Peripheral):
 
         checksum = self.get_checksum(addr,data)
 
-        msg = header + timestamp + self.lut_midi['msg_start'] + \
-            self.lut_midi['id_roland'] + \
-            self.lut_midi['id_device'] + \
-            b"\x00\x00\x00" + \
-            self.lut_midi['id_fp10'] + \
-            self.lut_midi['cmd_write'] + \
+        msg = header + timestamp + lut['sysex_msg_start'] + \
+            lut['id_roland'] + \
+            lut['cmd_write'] + \
             addr + \
             data + \
             checksum + \
             timestamp + \
-            self.lut_midi['msg_end']
+            lut['sysex_msg_end']
 
         self.writeCharacteristic(16,msg)
         self.waitForNotifications(2.0)
-        pass
+
 
     def get_header(self,unix_time):
         mask_header    = b'\x7f'
@@ -393,7 +373,7 @@ class RolandPiano(btle.Peripheral):
 
         ut = self.get_unix_time()
 
-        msg = self.get_header(ut) + self.get_timestamp(ut) + self.lookup_status['note_on_ch0'] + note + force
+        msg = self.get_header(ut) + self.get_timestamp(ut) + lut['note_on'] + note + force
         self.writeCharacteristic(16,msg) # 16 is the handler of the midi characteristic
 
     def get_handle(self,uuid):
@@ -452,7 +432,7 @@ def int_to_metronome(i):
 
 def setup_logging():
     log = logging.getLogger(__name__)
-    log.setLevel(logging.INFO)
+    log.setLevel(logging.DEBUG)
     # create formatter
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
