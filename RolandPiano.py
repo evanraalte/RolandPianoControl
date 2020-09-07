@@ -1,9 +1,8 @@
-#!/usr/bin/python3
 from bluepy import btle
 import time
 import pandas as pd
 import logging
-import argparse
+log = logging.getLogger(__name__)
 
 lut = {
     "note_on"         : b'\x80',
@@ -394,8 +393,6 @@ class RolandPiano(btle.Peripheral):
                     return False
         log.info(f"Connection with {self.mac_addr} established")
         return True
-                    
-
 
     def __init__(self,mac_addr):
         self.mac_addr = mac_addr
@@ -415,75 +412,19 @@ class RolandPiano(btle.Peripheral):
             log.error("Notification not correctly set in descriptor")
         self.write_register('connection',b"\x01")
 
+    def idle(self):
+        try:
+            self.waitForNotifications(1.0)
+            return
+        except btle.BTLEDisconnectError:
+            log.error("Disconnected from device, attemping to reconnect")
+            if self.connect(3):
+                return
+            else:
+                log.critical("Could not reconnect, exitting")
+                raise     
+
+
+
 def int_to_metronome(i):
     return b"\x00" + int_to_byte(i)
-
-
-def setup_logging(level):
-    log = logging.getLogger(__name__)
-    log.setLevel(level)
-    # create formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-    #console handler
-    ch = logging.StreamHandler()
-    # ch.setLevel(logging.DEBUG)
-    ch.setFormatter(formatter)
-    log.addHandler(ch)
-
-    #file handler
-    fh = logging.FileHandler('main.log')
-    # fh.setLevel(logging.DEBUG)
-    fh.setFormatter(formatter)
-    log.addHandler(fh)
-
-    return log
-
-
-
-def main():
-    piano = None
-    parser = argparse.ArgumentParser(description='Connect to Roland fp-10 piano')
-    parser.add_argument('mac_addr',metavar = 'mac_addr', type=str, help="mac address of the piano")
-
-    
-    args = parser.parse_args()
-    try:
-        piano = RolandPiano(args.mac_addr)
-        while True:
-            try: 
-                while True:
-                    # You could do stuff like this:
-                    # piano.read_register('sequencerTempoWO')
-                    # piano.read_register('masterVolume')
-                    #
-                    # or write.. 
-                    # piano.write_register('sequencerTempoWO',int_to_metronome(200))
-                    # piano.write_register('masterVolume',50)
-                    piano.waitForNotifications(1.0)
-
-            except btle.BTLEDisconnectError:
-                log.error("Disconnected from device, attemping to reconnect")
-                if piano.connect(3):
-                    continue
-                else:
-                    log.critical("Could not reconnect, exitting")
-                    exit(1)
-    except KeyboardInterrupt:
-        log.info("Exit cmd given by user, disconnecting..")
-        if piano:
-            piano.disconnect()
-
-
-if __name__ == "__main__":
-    log = setup_logging(logging.DEBUG)
-    main()
-
-
-     
-
-    
-
-
-    
-
