@@ -262,7 +262,6 @@ addresses = {
     # 010008xx
     "addressMapVersion":              b"\x01\x00\x08\x00"}
 
-
 def int_to_byte(num):
     return num.to_bytes(1,byteorder='big')
 
@@ -453,10 +452,14 @@ def main():
         piano = RolandPiano(args.mac_addr)
         while True:
             try: 
-
                 while True:
-                    piano.read_register('sequencerTempoWO')
-                    piano.read_register('masterVolume')
+                    # You could do stuff like this:
+                    # piano.read_register('sequencerTempoWO')
+                    # piano.read_register('masterVolume')
+                    #
+                    # or write.. 
+                    # piano.write_register('sequencerTempoWO',int_to_metronome(200))
+                    # piano.write_register('masterVolume',50)
                     piano.waitForNotifications(1.0)
 
             except btle.BTLEDisconnectError:
@@ -470,9 +473,6 @@ def main():
         log.info("Exit cmd given by user, disconnecting..")
         if piano:
             piano.disconnect()
-
-
-
 
 
 if __name__ == "__main__":
