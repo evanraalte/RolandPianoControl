@@ -285,11 +285,6 @@ def note_string_to_midi(midstr):
     answer += (int(midstr[-1]))*12
     return int_to_byte(answer)
 
-
-
-
-
-
 class RolandPiano(btle.Peripheral):
     service_uuid        = "03b80e5a-ede8-4b33-a751-6ce34ec4c700"
     characteristic_uuid = "7772e5db-3868-4112-a1a9-f2669d106bf3"
@@ -312,49 +307,44 @@ class RolandPiano(btle.Peripheral):
             total += b        
         return int_to_byte(128 - (total % 128))        
 
-    def read_register(self,addressName):
+    def access_register(self,addressName,data=None):
+        readRegister = False
+
         addr      = addresses[addressName]
-        data      = b"\x00\x00\x00" + int_to_byte(getAddressSize(addressName))
         ut        = self.get_unix_time()
         header    = self.get_header(ut)
-        timestamp = self.get_timestamp(ut)
+        timestamp = self.get_timestamp(ut)      
+
+        if data == None: # Read register
+            data      = b"\x00\x00\x00" + int_to_byte(getAddressSize(addressName))
+            readRegister = True
 
         checksum = self.get_checksum(addr,data)
+        cmd      = lut['cmd_read'] if readRegister else lut['cmd_write']
 
-        # TODO: lut best way to do this, seems overly configurable
-        msg = header + timestamp + lut['sysex_msg_start'] + \
+        msg_base = header + timestamp + lut['sysex_msg_start'] + \
             lut['id_roland'] + \
-            lut['cmd_read'] + \
+            cmd + \
             addr + \
             data + \
             checksum  
-        msg2 = header + timestamp + lut['sysex_msg_end']
 
-        self.writeCharacteristic(16,msg,withResponse=False)
-        self.writeCharacteristic(16,msg2,withResponse=False)
+        if readRegister:
+            msg_pt2 = header + timestamp + lut['sysex_msg_end']
+            self.writeCharacteristic(16,msg_base,withResponse=False)
+            self.writeCharacteristic(16,msg_pt2,withResponse=False)
+        else:
+            msg = msg_base + timestamp + lut['sysex_msg_end']
+            self.writeCharacteristic(16,msg)
+
         self.waitForNotifications(2.0)
-        pass
+
+
+    def read_register(self,addressName):
+        self.access_register(addressName)
 
     def write_register(self,addressName,data):
-        addr = addresses[addressName]
-        ut        = self.get_unix_time()
-        header    = self.get_header(ut)
-        timestamp = self.get_timestamp(ut)
-
-        checksum = self.get_checksum(addr,data)
-
-        msg = header + timestamp + lut['sysex_msg_start'] + \
-            lut['id_roland'] + \
-            lut['cmd_write'] + \
-            addr + \
-            data + \
-            checksum + \
-            timestamp + \
-            lut['sysex_msg_end']
-
-        self.writeCharacteristic(16,msg)
-        self.waitForNotifications(2.0)
-
+        self.access_register(addressName,data)
 
     def get_header(self,unix_time):
         mask_header    = b'\x7f'
