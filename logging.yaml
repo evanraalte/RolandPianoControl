@@ -8,11 +8,20 @@ handlers:
     level: DEBUG
     formatter: simple
     stream: ext://sys.stdout
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: simple
+    # stream: ext://sys.stdout
+    mode: a
+    maxBytes: 100000
+    filename: main.log
+    backupCount: 5
 loggers:
   RolandPiano:
     level: DEBUG
-    handlers: [console]
+    handlers: [console,file]
     propagate: no
 root:
   level: DEBUG
-  handlers: [console]
+  handlers: [console,file]
