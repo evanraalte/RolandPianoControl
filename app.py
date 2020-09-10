@@ -4,6 +4,7 @@ import RolandPiano as rp
 from bluepy import btle
 import logging
 import yaml
+import AmbiPiano
 
 def main():
     log.info("Exit cmd given by user, disconnecting..")
@@ -11,12 +12,17 @@ def main():
     parser = argparse.ArgumentParser(description='Connect to Roland fp-10 piano')
     parser.add_argument('mac_addr',metavar = 'mac_addr', type=str, help="mac address of the piano")
 
+    canvas = AmbiPiano.Canvas(randomize=False)
     
     args = parser.parse_args()
     try:
         piano = rp.RolandPiano(args.mac_addr)
         
         while True:
+            for k,v in piano.delegate.message.key_status.items():
+                if v > 0 : piano.delegate.message.key_status[k] -= 1
+            canvas.velocities = piano.delegate.message.key_status #list(map(lambda x: x*(300/127),piano.delegate.key_status))
+
             piano.idle()
                 
     except KeyboardInterrupt:

@@ -8,8 +8,8 @@ log = logging.getLogger(__name__)
 
 # TODO: yaml files?
 lut = {
-    "note_on"         : b'\x80',
-    "note_off"        : b'\x90',
+    "note_on"         : b'\x90',
+    "note_off"        : b'\x80',
     "control_change"  : b'\xb0',
     "sysex_msg_start" : b'\xf0',
     "sysex_msg_end"   : b'\xf7',
@@ -125,7 +125,10 @@ def note_string_to_midi(midstr):
     answer += (int(midstr[-1]))*12
     return int_to_byte(answer)
 
+
 class Message():
+    key_status = {}
+    sustain    = 0
     header_byte   = b""
 
     buf = b""
@@ -142,7 +145,8 @@ class Message():
         
 
     def __init__(self):
-        pass
+        for i in range(0,88+1):
+            self.key_status[i] = 0
 
     def reset(self):
         self.buf = b""
@@ -254,7 +258,22 @@ class Message():
         if self.isAudioMsg():
             if self.isValidAudioMsg():
                 for idx,_ in enumerate(self.notes):
+                    key = byte_to_int(self.notes[idx]) - 21
+                    vel = byte_to_int(self.velocities[idx])
+
+
+                    
+
+                    if self.status_bytes[idx] == lut['note_on']:
+                        self.key_status[key] = vel
+                    elif self.status_bytes[idx] == lut['note_off'] and self.sustain == 0: #TODO: fix bug when sustain is released and note is not turned of
+                        self.key_status[key] = 0
+                    elif self.status_bytes[idx] == lut['control_change']:
+                        self.sustain = vel
+
+                    log.debug(f"key: {key}, vel: {vel}")
                     log.debug(f"{self.status_bytes[idx].hex()} - note: {self.notes[idx].hex()}, velocity: {self.velocities[idx].hex()}")
+                    log.debug(self.key_status)
                 return 0
 
         elif self.isSysExMsg():
@@ -283,7 +302,6 @@ class RolandPiano(btle.Peripheral):
     characteristic_uuid = "7772e5db-3868-4112-a1a9-f2669d106bf3"
     setup_data = b"\x01\x00"
 
-    
     def build_handle_table(self):
         cols = ['handle','uuid_bytes','uuid_str']
         rows = []
@@ -419,10 +437,11 @@ class RolandPiano(btle.Peripheral):
         if not self.readCharacteristic(self.get_handle('2902')) == self.setup_data:
             log.error("Notification not correctly set in descriptor")
         self.write_register('connection',b"\x01")
+        log.info("Initialisation sequence completed")
 
     def idle(self):
         try:
-            self.waitForNotifications(1.0)
+            self.waitForNotifications(0.0166)
             return
         except btle.BTLEDisconnectError:
             log.error("Disconnected from device, attemping to reconnect")
