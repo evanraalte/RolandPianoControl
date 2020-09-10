@@ -18,6 +18,7 @@ class Canvas(threading.Thread):
 
     def __init__(self,randomize = False):
         super().__init__()
+        self.killed = False
         self.randomize = randomize
         # initial values
         
@@ -28,6 +29,8 @@ class Canvas(threading.Thread):
         self.clock = pygame.time.Clock()
         self.start()
 
+    def kill(self): 
+        self.killed = True
 
 
     def draw_bar(self,num,velocity):
@@ -46,7 +49,8 @@ class Canvas(threading.Thread):
                 # print(e)
                 if e.type == pygame.QUIT:
                     return
-
+            if self.killed:
+                raise SystemExit()
             self.clear()
             for i in range(0,88):
                 self.draw_bar(i,(300/127)*self.velocities[i])
