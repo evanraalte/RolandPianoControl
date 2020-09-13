@@ -47,12 +47,14 @@ def note_string_to_midi(midstr):
 fields = {}
 
 
-
+# categoryNo: parseInt(data.substr(0, 2), 16),
+# number: parseInt(data.substr(2, 2), 16) * 128 + parseInt(data.substr(4, 2), 16)
 
 def get_parser(addressName):
     parsers = {
         "sequencerTempoRO": lambda data: (data[1] & b"\x7F"[0]) | ((data[0] & b"\x7F"[0]) << 7),
-        "keyTransposeRO"  : lambda x  : x[0]-64
+        "keyTransposeRO"  : lambda x  : x[0]-64,
+        "toneForSingle" : lambda x : (x[0],x[2])
     }
 
     if addressName in parsers:
@@ -147,7 +149,8 @@ def get_address_size(addressName):
     addressSizeMap = {  # consider implementing this to read all registers
         "sequencerMeasure" : 2,
         "sequencerTempoRO" : 2,
-        "masterTuning"     : 2
+        "masterTuning"     : 2,
+        "toneForSingle"    : 3
     }
 
     if addressName in addressSizeMap:

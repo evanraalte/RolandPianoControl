@@ -25,7 +25,7 @@ def main():
 
         piano = rp.RolandPiano(args.mac_addr)
         field_timer = 0
-        fields = ['keyTransposeRO'] # 'masterVolume','sequencerTempoRO',
+        fields = ['toneForSingle'] # 'masterVolume','sequencerTempoRO',
         while True:
             # Update state of the key_status
             for k,v in piano.delegate.message.sustained_key_status.items():
