@@ -127,9 +127,10 @@ def note_string_to_midi(midstr):
 
 
 class Message():
-    key_status = {}
-    sustain    = 0
-    header_byte   = b""
+    key_status           = {}
+    sustained_key_status = {}
+    sustain              = 0
+    header_byte          = b""
 
     buf = b""
     def __str__(self):
@@ -146,6 +147,7 @@ class Message():
 
     def __init__(self):
         for i in range(0,88+1):
+            self.sustained_key_status[i] = 0
             self.key_status[i] = 0
 
     def reset(self):
@@ -193,7 +195,6 @@ class Message():
         return headerChanged or isMidiMsg
 
     def append(self,data):
-        # print("GGGGGG")
         if self.isNewMsg(data):
             # new message, discard old message
             self.reset()
@@ -261,19 +262,28 @@ class Message():
                     key = byte_to_int(self.notes[idx]) - 21
                     vel = byte_to_int(self.velocities[idx])
 
-
-                    
-
-                    if self.status_bytes[idx] == lut['note_on']:
+                    if self.status_bytes[idx]   == lut['note_on']:
                         self.key_status[key] = vel
-                    elif self.status_bytes[idx] == lut['note_off'] and self.sustain == 0: #TODO: fix bug when sustain is released and note is not turned of
+                    elif self.status_bytes[idx] == lut['note_off']: #TODO: fix bug when sustain is released and note is not turned of
                         self.key_status[key] = 0
                     elif self.status_bytes[idx] == lut['control_change']:
                         self.sustain = vel
 
                     log.debug(f"key: {key}, vel: {vel}")
                     log.debug(f"{self.status_bytes[idx].hex()} - note: {self.notes[idx].hex()}, velocity: {self.velocities[idx].hex()}")
-                    log.debug(self.key_status)
+
+                log.debug(list(self.key_status.values())[-10:])
+                log.debug(f"sustain: {self.sustain}")    
+
+                # # Handle sustain pedal
+                if self.sustain == 0:
+                    self.sustained_key_status = self.key_status.copy()
+                else:
+                    for k,v in self.key_status.items(): 
+                        if self.key_status[k] >= self.sustained_key_status[k]: 
+                            self.sustained_key_status[k] = self.key_status[k]
+
+                log.debug(list(self.sustained_key_status.values())[-10:])
                 return 0
 
         elif self.isSysExMsg():
