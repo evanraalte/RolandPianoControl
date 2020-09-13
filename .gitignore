@@ -1,4 +1,5 @@
 *.pcap
 *.txt
 *.log
+*.log.*
 __pycache__/**
