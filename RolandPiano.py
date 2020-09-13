@@ -26,11 +26,6 @@ def int_to_byte(num):
 def byte_to_int(byte):
     return int.from_bytes(byte,byteorder='big')
 
-def parse_sequencer_tempo(data):
-    # TODO: 2 byte to integer
-    return (data[1] & b"\x7F"[0]) | ((data[0] & b"\x7F"[0]) << 7)
-
-
 def note_string_to_midi(midstr):
     notes = [["C"],["C#","Db"],["D"],["D#","Eb"],["E"],["F"],["F#","Gb"],["G"],["G#","Ab"],["A"],["A#","Bb"],["B"]]
     answer = 0
@@ -56,14 +51,14 @@ fields = {}
 
 def get_parser(addressName):
     parsers = {
-        "sequencerTempoRO": parse_sequencer_tempo,
-        "masterVolume"    : byte_to_int
+        "sequencerTempoRO": lambda data: (data[1] & b"\x7F"[0]) | ((data[0] & b"\x7F"[0]) << 7),
+        "keyTransposeRO"  : lambda x  : x[0]-64
     }
 
     if addressName in parsers:
         return parsers[addressName]
     else:
-        return (lambda x : x) 
+        return byte_to_int
 
 addresses = {
     # 010000xx
