@@ -28,7 +28,7 @@ def byte_to_int(byte):
 
 def parse_sequencer_tempo(data):
     # TODO: 2 byte to integer
-    return (data[1] and 0x7F) | ((data[0] and 0x7F) << 7)
+    return (data[1] & b"\x7F"[0]) | ((data[0] & b"\x7F"[0]) << 7)
 
 
 def note_string_to_midi(midstr):
@@ -56,7 +56,7 @@ fields = {}
 
 def get_parser(addressName):
     parsers = {
-        "sequencerTempoWO": parse_sequencer_tempo,
+        "sequencerTempoRO": parse_sequencer_tempo,
         "masterVolume"    : byte_to_int
     }
 
@@ -151,7 +151,7 @@ def get_address_name(address):
 def get_address_size(addressName):
     addressSizeMap = {  # consider implementing this to read all registers
         "sequencerMeasure" : 2,
-        "sequencerTempoWO" : 2,
+        "sequencerTempoRO" : 2,
         "masterTuning"     : 2
     }
 
