@@ -11,7 +11,7 @@ import yaml
 def main():
     piano = None
     ambiPiano = None
-    
+
     parser = argparse.ArgumentParser(description='Connect to Roland fp-10 piano')
     parser.add_argument('-m','--mac_addr', type=str, help="Mac address of the piano")
     parser.add_argument('-apg','--ambi_piano_gui', action='store_true', help="Use ambi piano GUI")
@@ -24,7 +24,8 @@ def main():
             ambiPiano = AmbiPiano.Canvas(randomize=False)
 
         piano = rp.RolandPiano(args.mac_addr)
-        
+        field_timer = 0
+        fields = ['masterVolume','sequencerTempoWO']
         while True:
             # Update state of the key_status
             for k,v in piano.delegate.message.sustained_key_status.items():
@@ -35,6 +36,15 @@ def main():
                 ambiPiano.velocities = piano.delegate.message.sustained_key_status 
 
             piano.idle()
+
+            piano.print_fields(fields, onlyUpdates=True)
+
+            if field_timer == 60:
+                field_timer = 0
+                piano.update_fields(fields)
+            else:
+                field_timer += 1
+
                 
     except KeyboardInterrupt:
         log.info("Exit cmd given by user, disconnecting..")

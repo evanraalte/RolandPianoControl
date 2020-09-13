@@ -18,6 +18,53 @@ lut = {
     "id_roland"       : b'\x41\x10\x00\x00\x00\x28'
 }
 
+
+
+def int_to_byte(num):
+    return num.to_bytes(1,byteorder='big')
+
+def byte_to_int(byte):
+    return int.from_bytes(byte,byteorder='big')
+
+def parse_sequencer_tempo(data):
+    # TODO: 2 byte to integer
+    return (data[1] and 0x7F) | ((data[0] and 0x7F) << 7)
+
+
+def note_string_to_midi(midstr):
+    notes = [["C"],["C#","Db"],["D"],["D#","Eb"],["E"],["F"],["F#","Gb"],["G"],["G#","Ab"],["A"],["A#","Bb"],["B"]]
+    answer = 0
+    i = 0
+    #Note
+    letter = midstr.split('-')[0].upper()
+    for note in notes:
+        for form in note:
+            if letter.upper() == form:
+                answer = i
+                break
+        i += 1
+    #Octave
+    answer += (int(midstr[-1]))*12
+    return int_to_byte(answer)
+
+
+
+fields = {}
+
+
+
+
+def get_parser(addressName):
+    parsers = {
+        "sequencerTempoWO": parse_sequencer_tempo,
+        "masterVolume"    : byte_to_int
+    }
+
+    if addressName in parsers:
+        return parsers[addressName]
+    else:
+        return (lambda x : x) 
+
 addresses = {
     # 010000xx
     "serverSetupFileName":            b"\x01\x00\x00\x00",
@@ -98,32 +145,20 @@ addresses = {
     # 010008xx
     "addressMapVersion":              b"\x01\x00\x08\x00"}
 
+def get_address_name(address):
+    return list(addresses.keys())[list(addresses.values()).index(address)]
 
+def get_address_size(addressName):
+    addressSizeMap = {  # consider implementing this to read all registers
+        "sequencerMeasure" : 2,
+        "sequencerTempoWO" : 2,
+        "masterTuning"     : 2
+    }
 
-def int_to_byte(num):
-    return num.to_bytes(1,byteorder='big')
-
-def byte_to_int(byte):
-    return int.from_bytes(byte,byteorder='big')
-
-def int_to_metronome(i):
-    return b"\x00" + int_to_byte(i)
-
-def note_string_to_midi(midstr):
-    notes = [["C"],["C#","Db"],["D"],["D#","Eb"],["E"],["F"],["F#","Gb"],["G"],["G#","Ab"],["A"],["A#","Bb"],["B"]]
-    answer = 0
-    i = 0
-    #Note
-    letter = midstr.split('-')[0].upper()
-    for note in notes:
-        for form in note:
-            if letter.upper() == form:
-                answer = i
-                break
-        i += 1
-    #Octave
-    answer += (int(midstr[-1]))*12
-    return int_to_byte(answer)
+    if addressName in addressSizeMap:
+        return addressSizeMap[addressName]
+    else:
+        return 1
 
 
 class Message():
@@ -205,7 +240,6 @@ class Message():
                 self.buf            = data[3:]
             except Exception:
                 return -1 # done, with errors
-            # print("FFFF")
             if self.isAudioMsg():
 
                 # len is 5 + (n*4)
@@ -252,7 +286,8 @@ class Message():
 
     def isValidRolandMsg(self):
         cmp_checksum = self.get_checksum(self.address, self.data)
-        return self.man_id == lut['id_roland'] and self.cmd and self.address and self.checksum == cmp_checksum and self.data
+        correct_size = get_address_size(get_address_name(self.address)) == len(self.data)
+        return self.man_id == lut['id_roland'] and self.cmd and self.address and self.checksum == cmp_checksum and correct_size
 
 
     def decode(self):
@@ -279,7 +314,7 @@ class Message():
                 if self.sustain == 0:
                     self.sustained_key_status = self.key_status.copy()
                 else:
-                    for k,v in self.key_status.items(): 
+                    for k,_ in self.key_status.items(): 
                         if self.key_status[k] >= self.sustained_key_status[k]: 
                             self.sustained_key_status[k] = self.key_status[k]
 
@@ -289,6 +324,7 @@ class Message():
         elif self.isSysExMsg():
             if self.isValidRolandMsg():
                 log.debug(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
+                fields[get_address_name(self.address)] = (self.data,True)
                 return 0
         return -1
 
@@ -328,19 +364,6 @@ class RolandPiano(btle.Peripheral):
             total += b        
         return int_to_byte(128 - (total % 128))        
 
-    def get_address_size(self,addressName):
-
-        addressSizeMap = {  # consider implementing this to read all registers
-            "sequencerMeasure" : 2,
-            "sequencerTempoWO" : 2,
-            "masterTuning"     : 2
-        }
-
-        if addressName in addressSizeMap:
-            return addressSizeMap[addressName]
-        else:
-            return 1
-
     def access_register(self,addressName,data=None):
         readRegister = False
 
@@ -350,7 +373,7 @@ class RolandPiano(btle.Peripheral):
         timestamp = self.get_timestamp(ut)      
 
         if data == None: # Read register
-            data      = b"\x00\x00\x00" + int_to_byte(self.get_address_size(addressName))
+            data      = b"\x00\x00\x00" + int_to_byte(get_address_size(addressName))
             readRegister = True
 
         checksum = self.get_checksum(addr,data)
@@ -379,6 +402,29 @@ class RolandPiano(btle.Peripheral):
 
     def write_register(self,addressName,data):
         self.access_register(addressName,data)
+
+
+    def read_field(self,field):
+        if field in fields:
+            (data,isNew) = fields[field]
+            if isNew:
+                fields[field] = (data,False)
+            return (data, isNew)
+        else:
+            return ("", False)
+
+    def print_fields(self,fields, onlyUpdates = False):
+        for field in fields:
+            (data,isNew) = self.read_field(field)
+            if onlyUpdates and not isNew:
+                continue
+            else:
+                parser = get_parser(field)
+                log.info(f"{field}: {parser(data)}")
+
+    def update_fields(self,fields):
+        for field in fields:
+            self.read_register(field)
 
     def get_header(self,unix_time):
         mask_header    = b'\x7f'
