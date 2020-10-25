@@ -18,10 +18,10 @@ handlers:
     filename: main.log
     backupCount: 5
 loggers:
-  RolandPiano:
+  RolandPianoUsb:
     level: DEBUG
-    handlers: [console,file]
+    handlers: [console]
     propagate: no
 root:
   level: DEBUG
-  handlers: [console,file]
+  handlers: [console]

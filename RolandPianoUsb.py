@@ -1,0 +1,510 @@
+import mido
+import time
+import logging
+log = logging.getLogger(__name__)
+
+
+def int_to_byte(num):
+    return num.to_bytes(1,byteorder='big')
+
+def byte_to_int(byte):
+    return int.from_bytes(byte,byteorder='big')
+
+def note_string_to_midi(midstr):
+    notes = [["C"],["C#","Db"],["D"],["D#","Eb"],["E"],["F"],["F#","Gb"],["G"],["G#","Ab"],["A"],["A#","Bb"],["B"]]
+    answer = 0
+    i = 0
+    #Note
+    letter = midstr.split('-')[0].upper()
+    for note in notes:
+        for form in note:
+            if letter.upper() == form:
+                answer = i
+                break
+        i += 1
+    #Octave
+    answer += (int(midstr[-1]))*12
+    return answer 
+
+def get_reverse_parser(address_name):
+    parsers = {
+        "sequencerTempoWO": lambda x: int_to_byte((x & 0xff80) >> 7) + int_to_byte(x & 0x7f),
+        "keyTransposeRO"  : lambda x  : int_to_byte(x+64),
+        # "toneForSingle" : lambda x : (x[0],x[2])
+    }
+
+    if address_name in parsers:
+        return parsers[address_name]
+    else:
+        return int_to_byte
+
+
+
+def get_parser(addressName):
+    parsers = {
+        "sequencerTempoRO": lambda data: (data[1] & b"\x7F"[0]) | ((data[0] & b"\x7F"[0]) << 7),
+        "keyTransposeRO"  : lambda x  : x[0]-64,
+        "toneForSingle" : lambda x : (x[0],x[2])
+    }
+
+    if addressName in parsers:
+        return parsers[addressName]
+    else:
+        return byte_to_int
+
+lut = {
+    "note_on"         : b'\x90',
+    "note_off"        : b'\x80',
+    "control_change"  : b'\xb0',
+    "sysex_msg_start" : b'\xf0',
+    "sysex_msg_end"   : b'\xf7',
+    "cmd_read"        : b'\x11',
+    "cmd_write"       : b'\x12', 
+    "id_roland"       : b'\x41\x10\x00\x00\x00\x28'
+}
+
+
+addresses = {
+    # 010000xx
+    "serverSetupFileName":            b"\x01\x00\x00\x00",
+    # 010001xx
+    "songToneLanguage":               b"\x01\x00\x01\x00",
+    "keyTransposeRO":                 b"\x01\x00\x01\x01",
+    "songTransposeRO":                b"\x01\x00\x01\x02",
+    "sequencerStatus":                b"\x01\x00\x01\x03",
+    "sequencerMeasure":               b"\x01\x00\x01\x05",
+    "sequencerTempoNotation":         b"\x01\x00\x01\x07",
+    "sequencerTempoRO":               b"\x01\x00\x01\x08",
+    "sequencerBeatNumerator":         b"\x01\x00\x01\x0A",
+    "sequencerBeatDenominator":       b"\x01\x00\x01\x0B",
+    "sequencerPartSwAccomp":          b"\x01\x00\x01\x0C",
+    "sequencerPartSwLeft":            b"\x01\x00\x01\x0D",
+    "sequencerPartSwRight":           b"\x01\x00\x01\x0E",
+    "metronomeStatus":                b"\x01\x00\x01\x0F",
+    "headphonesConnection":           b"\x01\x00\x01\x10",
+    # 010002xx
+    "keyBoardMode":                   b"\x01\x00\x02\x00",
+    "splitPoint":                     b"\x01\x00\x02\x01",
+    "splitOctaveShift":               b"\x01\x00\x02\x02",
+    "splitBalance":                   b"\x01\x00\x02\x03",
+    "dualOctaveShift":                b"\x01\x00\x02\x04",
+    "dualBalance":                    b"\x01\x00\x02\x05",
+    "twinPianoMode":                  b"\x01\x00\x02\x06",
+    "toneForSingle":                  b"\x01\x00\x02\x07",
+    "toneForSplit":                   b"\x01\x00\x02\x0A",
+    "toneForDual":                    b"\x01\x00\x02\x0D",
+    "songNumber":                     b"\x01\x00\x02\x10",
+    "masterVolume":                   b"\x01\x00\x02\x13",
+    "masterVolumeLimit":              b"\x01\x00\x02\x14",
+    "allSongPlayMode":                b"\x01\x00\x02\x15",
+    "splitRightOctaveShift":          b"\x01\x00\x02\x16",
+    "dualTone1OctaveShift":           b"\x01\x00\x02\x17",
+    "masterTuning":                   b"\x01\x00\x02\x18",
+    "ambience":                       b"\x01\x00\x02\x1A",
+    "headphones3DAmbience":           b"\x01\x00\x02\x1B",
+    "brilliance":                     b"\x01\x00\x02\x1C",
+    "keyTouch":                       b"\x01\x00\x02\x1D",
+    "transposeMode":                  b"\x01\x00\x02\x1E",
+    "metronomeBeat":                  b"\x01\x00\x02\x1F",
+    "metronomePattern":               b"\x01\x00\x02\x20",
+    "metronomeVolume":                b"\x01\x00\x02\x21",
+    "metronomeTone":                  b"\x01\x00\x02\x22",
+    "metronomeDownBeat":              b"\x01\x00\x02\x23",
+    # 010003xx
+    "applicationMode":                b"\x01\x00\x03\x00",
+    "scorePageTurn":                  b"\x01\x00\x03\x02",
+    "arrangerPedalFunction":          b"\x01\x00\x03\x03",
+    "arrangerBalance":                b"\x01\x00\x03\x05",
+    "connection":                     b"\x01\x00\x03\x06",
+    "keyTransposeWO":                 b"\x01\x00\x03\x07",
+    "songTransposeWO":                b"\x01\x00\x03\x08",
+    "sequencerTempoWO":               b"\x01\x00\x03\x09",
+    "tempoReset":                     b"\x01\x00\x03\x0B",
+    # 010004xx
+    "soundEffect":                    b"\x01\x00\x04\x00",
+    "soundEffectStopAll":             b"\x01\x00\x04\x02",
+    # 010005xx
+    "sequencerREW":                   b"\x01\x00\x05\x00",
+    "sequencerFF":                    b"\x01\x00\x05\x01",
+    "sequencerReset":                 b"\x01\x00\x05\x02",
+    "sequencerTempoDown":             b"\x01\x00\x05\x03",
+    "sequencerTempoUp":               b"\x01\x00\x05\x04",
+    "sequencerPlayStopToggle":        b"\x01\x00\x05\x05",
+    "sequencerAccompPartSwToggle":    b"\x01\x00\x05\x06",
+    "sequencerLeftPartSwToggle":      b"\x01\x00\x05\x07",
+    "sequencerRightPartSwToggle":     b"\x01\x00\x05\x08",
+    "metronomeSwToggle":              b"\x01\x00\x05\x09",
+    "sequencerPreviousSong":          b"\x01\x00\x05\x0A",
+    "sequencerNextSong":              b"\x01\x00\x05\x0B",
+    # 010006xx
+    "pageTurnPreviousPage":           b"\x01\x00\x06\x00",
+    "pageTurnNextPage":               b"\x01\x00\x06\x01",
+    # 010007xx
+    "uptime":                         b"\x01\x00\x07\x00",
+    # 010008xx
+    "addressMapVersion":              b"\x01\x00\x08\x00"}
+
+def get_address_name(address):
+    try:
+        return list(addresses.keys())[list(addresses.values()).index(address)]
+    except ValueError:
+        return "unknown"
+
+def get_address_size(addressName):
+    addressSizeMap = {  # consider implementing this to read all registers
+        "serverSetupFileName" : 32,
+        "sequencerMeasure" : 2,
+        "sequencerTempoRO" : 2,
+        "toneForSingle"    : 2,
+        "toneForSplit"     : 3,
+        "toneForDual"      : 3,
+        "songNumber"       : 3,
+        "masterTuning"     : 2,
+        "arrangerPedalFunction" : 2,
+        "sequencerTempoWO" : 2,
+        "uptime" : 8
+    }
+
+    if addressName in addressSizeMap:
+        return addressSizeMap[addressName]
+    else:
+        return 1
+
+class Message():
+    key_status           = {}
+    sustained_key_status = {}
+    sustain              = 0
+    header_byte          = b""
+
+    buf = b""
+    def __str__(self):
+        buffer = ""
+        buffer += f"buf: {self.buf.hex()}\n"
+        buffer += f"header_byte: {self.header_byte}, timestamp_byte: {self.timestamp_byte}\n"
+        buffer += f"status_byte: {self.status_byte}\n"
+
+        for idx,_ in enumerate(self.notes):
+            buffer += f"note: {self.notes[idx]}, velocity: {self.velocities[idx]}\n"
+
+        return buffer
+        
+
+    def __init__(self,fields):
+        self.fields = fields
+        for i in range(0,88+1):
+            self.sustained_key_status[i] = 0
+            self.key_status[i] = 0
+
+    def reset(self):
+        self.buf = b""
+        self.header_byte    = None
+        self.timestamp_byte = None
+        self.status_byte    = None
+
+        self.status_bytes   = None
+        self.notes          = None
+        self.velocities     = None
+
+        self.man_id         = None
+        self.cmd            = None
+        self.address        = None
+        self.data           = None
+        self.checksum       = None
+        return
+
+    def getAudioStatusCodes(self):
+        return [lut['note_on'], lut['note_off'], lut['control_change']]
+
+    def isAudioMsg(self):
+        return self.status_byte in self.getAudioStatusCodes()
+
+    def isValidAudioMsg(self):
+        return self.status_byte and self.notes and self.velocities
+    
+    def isSysExMsg(self):
+        return self.status_byte == lut['sysex_msg_start']
+
+    def timeStampChanged(self,data):
+        return self.timestamp_byte != data[2:3]
+
+    def sysExMsgEnded(self):
+        return (lut['sysex_msg_end'] in self.buf)
+
+    def validSysExMsgLength(self):
+        # cmd (2) + address (8) + data (>=1) + checksum (1)
+        return len(self.buf) >= (2+8+1+1)
+
+    def isNewMsg(self, data):
+        headerChanged = True #(data[0:1] != self.header_byte)
+        isMidiMsg = len(data) == 5 and (data[2:3] in self.getAudioStatusCodes())
+        return headerChanged or isMidiMsg
+
+    def append(self,data):
+        if self.isNewMsg(data):
+            # new message, discard old message
+            self.reset()
+            try:
+                # self.header_byte    = data[0:1]
+                # self.timestamp_byte = data[1:2]
+                self.status_byte    = data[0:1]
+                self.buf            = data[1:]
+            except Exception:
+                return -1 # done, with errors
+            if self.isAudioMsg():
+
+                # len is 5 + (n*4)
+                # n is not larger than 2, so basically a message can hold 3 midi audio updates. 
+                #TODO: write more elegantly
+
+                if len(self.buf) == 2: # Contains one midi msg
+                    try:
+                        self.status_bytes = [self.status_byte]
+                        self.notes     = [self.buf[0:1]]
+                        self.velocities = [self.buf[1:2]]
+                    except Exception:
+                        return -1  # done, with errors
+                elif len(self.buf) == 6: # Contains two midi msgs ('compressed')
+                    try:
+                        self.status_bytes = [self.status_byte, self.buf[3:4]]
+                        self.notes     = [self.buf[0:1],self.buf[4:4+1]]
+                        self.velocities = [self.buf[1:2],self.buf[5:5+1]]
+                    except Exception:
+                        return -1  # done, with errors
+                return 1 # done
+        else: 
+            self.buf += data[1:] # append message
+    
+        if self.isSysExMsg() and self.sysExMsgEnded() and self.validSysExMsgLength():
+            self.buf      = self.buf.split(lut['sysex_msg_end'])[0] # cut the message at the end
+            self.man_id   = self.buf[0:6]
+            self.cmd      = self.buf[6:6+1]
+            self.address  = self.buf[7:7+4]
+            l             = len(self.buf)
+            self.checksum = self.buf[l-1:l] 
+            self.data     = self.buf[11:l-1]
+            return 1 # done succesfully
+        else:
+            return 0 # not done
+
+    def get_checksum(self,addr,data):
+        total = 0
+        for b in addr:
+            total += b
+        for b in data:
+            total += b        
+        return int_to_byte(128 - (total % 128))  
+
+    def isValidRolandMsg(self):
+        cmp_checksum = self.get_checksum(self.address, self.data)
+        correct_size = get_address_size(get_address_name(self.address)) == len(self.data)
+        return self.man_id == lut['id_roland'] and self.cmd and self.address and self.checksum == cmp_checksum and correct_size
+
+
+    def decode(self):
+        if self.isAudioMsg():
+            if self.isValidAudioMsg():
+                for idx,_ in enumerate(self.notes):
+                    key = byte_to_int(self.notes[idx]) - 21
+                    vel = byte_to_int(self.velocities[idx])
+
+                    if self.status_bytes[idx]   == lut['note_on']:
+                        self.key_status[key] = vel
+                    elif self.status_bytes[idx] == lut['note_off']: #TODO: fix bug when sustain is released and note is not turned of
+                        self.key_status[key] = 0
+                    elif self.status_bytes[idx] == lut['control_change']:
+                        self.sustain = vel
+
+                    log.debug(f"key: {key}, vel: {vel}")
+                    log.debug(f"{self.status_bytes[idx].hex()} - note: {self.notes[idx].hex()}, velocity: {self.velocities[idx].hex()}")
+
+                log.debug(list(self.key_status.values())[-10:])
+                log.debug(f"sustain: {self.sustain}")    
+
+                # # Handle sustain pedal
+                if self.sustain == 0:
+                    self.sustained_key_status = self.key_status.copy()
+                else:
+                    for k,_ in self.key_status.items(): 
+                        if self.key_status[k] >= self.sustained_key_status[k]: 
+                            self.sustained_key_status[k] = self.key_status[k]
+
+                log.debug(list(self.sustained_key_status.values())[-10:])
+                return 0
+
+        elif self.isSysExMsg():
+            if self.isValidRolandMsg():
+                log.debug(f"address: {self.address.hex()}, data: {self.data.hex()}, cmd: {self.cmd.hex()}")
+                
+                addr_name = get_address_name(self.address)
+
+                if addr_name not in self.fields:
+                    self.fields[addr_name] = (0,False)
+
+                if self.fields[addr_name][0] != self.data: 
+                    self.fields[get_address_name(self.address)] = (self.data,True)
+                
+                return 0
+        return -1
+
+class RolandPianoUsb():
+    def get_checksum(self,addr,data):
+        total = 0
+        for b in addr:
+            total += b
+        for b in data:
+            total += b        
+        return int_to_byte((128 - (total % 128)) & 0x7f)  
+
+
+    def access_register(self,addressName,data=None):
+        readRegister = False
+        addr      = addresses[addressName]   
+
+        if data == None: # Read register
+            data      = b"\x00\x00\x00" + int_to_byte(get_address_size(addressName))
+            readRegister = True
+
+        checksum = self.get_checksum(addr,data)
+        cmd      = lut['cmd_read'] if readRegister else lut['cmd_write']
+
+        msg_base = lut['id_roland'] + \
+                   cmd + \
+                   addr + \
+                   data + \
+                   checksum  
+        log.info(f"checksum: {checksum}")
+        log.info(msg_base)
+        msg = mido.Message('sysex', data = msg_base)
+        # print("xxx")
+        # print(msg.hex()) # 'F0 41 10 00 00 00 28 12 01 00 03 06 01 75 F7'
+        log.info(msg.hex())
+        self.port_out.send(msg)
+        # time.sleep(0.5)
+
+
+    def read_register(self,addressName):
+        # print("yyy")
+        self.access_register(addressName)
+
+    def write_register(self,addressName,data):
+        self.access_register(addressName,data)
+
+    def play_note(self,note, force):
+        note  = note_string_to_midi(note)
+        # force = int_to_byte(force)
+
+        msg = mido.Message('note_on',note=note,velocity=force)
+        self.port_out.send(msg)
+
+
+    def read_all(self):
+        ret = {}
+        for name in addresses.keys():
+            # self.port_in  = mido.open_input(self.portName)
+            self.read_register(name)
+            ret[name] = ""
+            time.sleep(0.1)
+            for msg in self.port_in.iter_pending():
+                ret[name] += " " + msg.hex()
+            # self.port_in.close()
+        return ret
+
+    def read_field(self,field):
+        if field in self.fields:
+            (data,isNew) = self.fields[field]
+            if isNew:
+                self.fields[field] = (data,False)
+            return (data, isNew)
+        else:
+            return ("", False)
+
+    def print_fields(self,fields, onlyUpdates = False):
+        for field in fields:
+            (data,isNew) = self.read_field(field)
+            if onlyUpdates and not isNew:
+                continue
+            else:
+                try:
+                    parser = get_parser(field)
+                    log.info(f"{field}: {parser(data)}")
+                except Exception:
+                    log.debug("Does not contain values yet")
+
+    def set_fields(self,fields):
+        self.requested_fields = fields
+
+    def update_fields(self):
+        for field in self.requested_fields:
+            self.read_register(field)
+
+    def add_pending_write_action(self,addr_name,data):
+        self.pending_write_actions.append((addr_name,data))
+        self.has_pending_write_actions = True
+
+    def perform_pending_write_actions(self):
+        try:
+            if self.has_pending_write_actions:
+                for (addr_name,data) in self.pending_write_actions:
+                    log.info(data.hex())
+                    self.write_register(addr_name,data)
+                self.has_pending_write_actions = False
+            self.pending_write_actions = []
+        except Exception:
+            log.exception(self.pending_write_actions)
+            exit()
+        # write_register
+
+    def __init__(self,portName=None):
+        log.info("init piano")
+        if portName in mido.get_input_names():
+            self.portName = portName
+            self.port_in  = mido.open_input(portName)
+            self.port_out = mido.open_output(portName)
+            self.fields = {}
+            self.pending_write_actions = []
+            self.has_pending_write_actions = False
+            self.message = Message(self.fields)
+            self.read_register('uptime') # 389
+            self.read_register('addressMapVersion') #391
+            msg = mido.Message('sysex',data = b"\x7e\x10\x06\x01")
+            # print(msg.hex())
+            self.port_out.send(msg)#399 (requestModelId)
+            self.read_register('serverSetupFileName') #402
+            self.write_register('connection',b"\x01") #409
+            self.write_register('applicationMode',b"\x01") #410
+            self.read_register('sequencerStatus') #411
+            self.read_register('metronomeStatus') #415
+
+            self.write_register('applicationMode',b"\x00") #410
+            # self.port_in.close()
+            # self.read_register('songToneLanguage') #420
+            # self.read_register('songToneLanguage') #420
+            # self.read_register('keyBoardMode') #424
+            # self.read_register('masterVolume') #426
+            # self.read_register('masterVolumeLimit') #426
+
+            self.portsOpened = True
+
+
+    def handle(self,msg):
+        log.info(msg.hex())
+
+    def disconnect(self):
+        self.port_out.close()
+        self.port_in.close()      
+
+    def port_in_handler(self):
+        # log.info("bleh")
+        if self.portsOpened:
+            for msg in self.port_in.iter_pending():
+                status = self.message.append(msg.bin())
+                # log.info(msg.hex())
+                # log.info(status)
+                if status == 1:
+                    self.message.decode()
+
+                elif status == -1:
+                    log.error("Not a valid message")
+                    log.error(self.message)
+
+

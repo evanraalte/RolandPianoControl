@@ -8,10 +8,10 @@
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            "program": "app.py",
+            "program": "appUsb.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["-m c3:14:a9:3e:8f:77"]
+            // "args": ["-m c3:14:a9:3e:8f:77"]
 
         }
     ]

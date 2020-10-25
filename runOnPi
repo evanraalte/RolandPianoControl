@@ -1,0 +1,5 @@
+#! /bin/sh
+scp -r /home/erik/Documents/Hackathlon2020 pi@10.0.0.1:/home/pi/Documents/
+ssh -t pi@10.0.0.1 'cd /home/pi/Documents/Hackathlon2020/ && python3 appUsb.py'
+
+
