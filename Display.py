@@ -42,7 +42,7 @@ class PianoData: # TODO: integrate with other utils
 def draw_screen0(device, piano_fields):
     try:
         f = get_parser('masterVolume')
-        print(piano_fields['masterVolume'])
+        # print(piano_fields['masterVolume'])
         volume = f(piano_fields['masterVolume'][0]) #random.randint(0,100)
     except KeyError:
         volume = 0 

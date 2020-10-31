@@ -77,6 +77,16 @@ lut = {
 }
 
 
+bound_max = {
+    "masterVolume" : 100,
+    "sequencerTempoRO" : 250,
+}
+
+bound_min= {
+    "masterVolume" : 0,
+    "sequencerTempoRO" : 0,
+}
+
 addresses = {
     # 010000xx
     "serverSetupFileName":            b"\x01\x00\x00\x00",
@@ -185,6 +195,6 @@ def get_address_size(addressName):
 
 
 rotary_encoder_mapping = [
-    ("masterVolume",0,100),
-    ("sequencerTempoWO",0,200)
+    "masterVolume",
+    "sequencerTempoWO"
 ]

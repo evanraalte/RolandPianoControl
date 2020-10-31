@@ -8,9 +8,9 @@ class RotaryEncoder:
         a_d0 = GPIO.input(self.pin_a)
         b_d0 = GPIO.input(self.pin_b)
         if b_d0 != a_d0:
-            self.cb_r(self.piano,self.num,True)
+            self.cb_r(self.piano,self.num,1)
         else:
-            self.cb_r(self.piano,self.num,False)
+            self.cb_r(self.piano,self.num,-1)
 
     def cb_switch(self,channel):
         self.cb_sw(self.num)

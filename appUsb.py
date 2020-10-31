@@ -22,36 +22,10 @@ if running_as_rpi:
     def switch(num):
         log.info(f"SW on num:{num}") 
 
-    def rot(piano,num,countUp):
-        log.info(f"R on num:{num}, count: {countUp}")
-
-        address_name = rotary_encoder_mapping[num][0]
-        minimum      = rotary_encoder_mapping[num][1] 
-        maximum      = rotary_encoder_mapping[num][2]
-
-        if address_name == "sequencerTempoWO":
-            address_name_read = "sequencerTempoRO"
-        else:
-            address_name_read = address_name
-
-
-        if address_name_read not in piano.fields:
-            piano.fields[address_name_read] = (get_address_size(address_name_read)*b"\x00",False)
-
-        parser = get_parser(address_name_read)
-
-        var = parser(piano.fields[address_name_read][0])
-
-        var_new = (var + 1) if countUp else (var - 1)
-        if maximum > var_new > minimum:
-            var = var_new
-
-        reverse_parser = get_reverse_parser(address_name)
-
-        log.info(f"var: {var}")
-        if var != piano.fields[address_name_read]: # if changed
-            piano.fields[address_name_read] = (reverse_parser(var),True)
-            piano.add_pending_write_action(address_name,reverse_parser(var))
+    def rot(piano,num,incr):
+        log.info(f"R on num:{num}, incr: {incr}")
+        address_name = rotary_encoder_mapping[num]
+        piano.add_pending_write_action(address_name,incr)
 
 
 
@@ -81,10 +55,10 @@ def main():
         fields = ['toneForSingle','masterVolume','sequencerTempoRO']
         piano.set_fields(fields)
         while True:
-            time.sleep(.05)
+            time.sleep(.016)
 
             # pd.randomize()
-            Display.draw_screen0(device,piano.fields)
+            # Display.draw_screen0(device,piano.fields)
 
             piano.port_in_handler()
             piano.print_fields(fields, onlyUpdates=True)
@@ -92,7 +66,7 @@ def main():
 
             piano.perform_pending_write_actions()
 
-            if field_timer == 5:
+            if field_timer == 20:
                 logging.info("Updating fields")
                 field_timer = 0
                 piano.update_fields()

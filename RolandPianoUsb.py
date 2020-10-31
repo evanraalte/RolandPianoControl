@@ -207,12 +207,12 @@ class RolandPianoUsb():
                    addr + \
                    data + \
                    checksum  
-        log.info(f"checksum: {checksum}")
-        log.info(msg_base)
+        # log.info(f"checksum: {checksum}")
+        # log.info(msg_base)
         msg = mido.Message('sysex', data = msg_base)
         # print("xxx")
         # print(msg.hex()) # 'F0 41 10 00 00 00 28 12 01 00 03 06 01 75 F7'
-        log.info(msg.hex())
+        # log.info(msg.hex())
         self.port_out.send(msg)
         # time.sleep(0.5)
 
@@ -261,7 +261,7 @@ class RolandPianoUsb():
             else:
                 try:
                     parser = get_parser(field)
-                    log.info(f"{field}: {parser(data)}")
+                    # log.info(f"{field}: {parser(data)}")
                 except Exception:
                     log.debug("Does not contain values yet")
 
@@ -272,18 +272,44 @@ class RolandPianoUsb():
         for field in self.requested_fields:
             self.read_register(field)
 
-    def add_pending_write_action(self,addr_name,data):
-        self.pending_write_actions.append((addr_name,data))
-        self.has_pending_write_actions = True
+    def add_pending_write_action(self,addr_name,incr):
+        if addr_name in self.pending_write_actions:
+            self.pending_write_actions[addr_name] += incr
+        else:
+            self.pending_write_actions[addr_name] = incr
 
     def perform_pending_write_actions(self):
         try:
-            if self.has_pending_write_actions:
-                for (addr_name,data) in self.pending_write_actions:
-                    log.info(data.hex())
-                    self.write_register(addr_name,data)
-                self.has_pending_write_actions = False
-            self.pending_write_actions = []
+            for address_name,incr in self.pending_write_actions.items():
+                # Set correct read address
+                if address_name == "sequencerTempoWO":
+                    address_name_read = "sequencerTempoRO"
+                else:
+                    address_name_read = address_name
+
+                # get current value
+                if address_name_read not in self.fields:
+                    self.fields[address_name_read] = (get_address_size(address_name_read)*b"\x00",False)
+                
+                # log.info(address_name)
+                f = get_parser(address_name_read)
+                cur_val = f(self.fields[address_name_read][0])
+                # log.info(f"cur_val: {cur_val}")
+
+                # add difference and do bound checks (increments can be larger than one, beware )
+                if cur_val + incr > bound_max[address_name_read]:
+                    new_val = bound_max[address_name_read]
+                elif cur_val + incr < bound_min[address_name_read]:
+                    new_val = bound_min[address_name_read]
+                else:
+                    new_val = cur_val + incr
+                # log.info(f"new_val: {new_val}")
+                # write to register
+                f = get_reverse_parser(address_name)
+                self.write_register(address_name,f(new_val))
+                # Update fields manually
+                self.fields[address_name_read] = (f(new_val),True)
+            self.pending_write_actions = {}
         except Exception:
             log.exception(self.pending_write_actions)
             exit()
@@ -296,7 +322,7 @@ class RolandPianoUsb():
             self.port_in  = mido.open_input(portName)
             self.port_out = mido.open_output(portName)
             self.fields = {}
-            self.pending_write_actions = []
+            self.pending_write_actions = {}
             self.has_pending_write_actions = False
             self.message = Message(self.fields)
             self.read_register('uptime') # 389
