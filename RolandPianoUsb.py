@@ -173,7 +173,7 @@ class Message():
                 addr_name = get_address_name(self.address)
 
                 if addr_name not in self.fields:
-                    self.fields[addr_name] = (0,False)
+                    self.fields[addr_name] = (get_address_size(addr_name)*b"\x00",False)
 
                 if self.fields[addr_name][0] != self.data: 
                     self.fields[get_address_name(self.address)] = (self.data,True)
