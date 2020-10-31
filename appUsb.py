@@ -5,64 +5,10 @@ import yaml
 import logging
 import argparse
 import os
+from Utils import *
+
 
 running_as_rpi = os.uname().nodename == "raspberrypi"
-
-rotary_encoder_mapping = [
-    ("masterVolume",0,100),
-    ("sequencerTempoWO",0,200)
-]
-
-def int_to_byte(num):
-    return num.to_bytes(1,byteorder='big')
-
-def byte_to_int(byte):
-    return int.from_bytes(byte,byteorder='big')
-
-def get_reverse_parser(address_name):
-    parsers = {
-        "sequencerTempoWO": lambda x: int_to_byte((x & 0xff80) >> 7) + int_to_byte(x & 0x7f),
-        "keyTransposeRO"  : lambda x  : int_to_byte(x+64),
-        # "toneForSingle" : lambda x : (x[0],x[2])
-    }
-
-    if address_name in parsers:
-        return parsers[address_name]
-    else:
-        return int_to_byte
-
-def get_parser(addressName):
-    parsers = {
-        "sequencerTempoRO": lambda data: (data[1] & b"\x7F"[0]) | ((data[0] & b"\x7F"[0]) << 7),
-        "keyTransposeRO"  : lambda x  : x[0]-64,
-        "toneForSingle" : lambda x : (x[0],x[2])
-    }
-
-    if addressName in parsers:
-        return parsers[addressName]
-    else:
-        return byte_to_int
-
-def get_address_size(addressName):
-    addressSizeMap = {  # consider implementing this to read all registers
-        "serverSetupFileName" : 32,
-        "sequencerMeasure" : 2,
-        "sequencerTempoRO" : 2,
-        "toneForSingle"    : 2,
-        "toneForSplit"     : 3,
-        "toneForDual"      : 3,
-        "songNumber"       : 3,
-        "masterTuning"     : 2,
-        "arrangerPedalFunction" : 2,
-        "sequencerTempoWO" : 2,
-        "uptime" : 8
-    }
-
-    if addressName in addressSizeMap:
-        return addressSizeMap[addressName]
-    else:
-        return 1
-
 
 
 if running_as_rpi:
@@ -70,7 +16,7 @@ if running_as_rpi:
     from RPi import GPIO
 
     def switch(num):
-        print(f"SW on num:{num}")
+        log.info(f"SW on num:{num}")
 
     def rot(piano,num,countUp):
         log.info(f"R on num:{num}, count: {countUp}")
