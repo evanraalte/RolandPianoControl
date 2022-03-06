@@ -1,3 +1,7 @@
+Revamped this repo into https://github.com/evanraalte/RolandPiano
+Trying to keep it a bit simpler this time :)
+
+
 # How this started
 
 # Getting started
